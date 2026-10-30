@@ -29,6 +29,14 @@ struct BlockedApp: Codable, Hashable, Identifiable {
     var id: String { bundleID }
 }
 
+struct Project: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var name: String
+    var createdAt = Date()
+    /// nil means that the global blocking configuration is inherited.
+    var blockedApps: [BlockedApp]?
+}
+
 struct FocusSettings: Codable, Equatable {
     var focusMinutes = 25
     var shortBreakMinutes = 5
@@ -69,6 +77,9 @@ struct Todo: Codable, Identifiable, Equatable {
     /// True while the note is still being turned into concrete todos.
     var isRefining = false
     var refinedByAI = false
+    var projectID: UUID?
+    /// nil means that the project (or global) blocking configuration is inherited.
+    var blockedApps: [BlockedApp]?
 
     var isDone: Bool { completedAt != nil }
 }

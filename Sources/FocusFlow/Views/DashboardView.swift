@@ -1,12 +1,13 @@
 import SwiftUI
 
 enum DashboardSection: String, CaseIterable, Identifiable {
-    case focus, todos, stats, settings
+    case focus, projects, todos, stats, settings
     var id: Self { self }
 
     var title: String {
         switch self {
         case .focus: "Fokus"
+        case .projects: "Projekte"
         case .todos: "Todos"
         case .stats: "Statistik"
         case .settings: "Einstellungen"
@@ -16,6 +17,7 @@ enum DashboardSection: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .focus: "timer"
+        case .projects: "folder"
         case .todos: "checklist"
         case .stats: "chart.bar.xaxis"
         case .settings: "gearshape"
@@ -38,6 +40,7 @@ struct DashboardView: View {
         } detail: {
             switch state.dashboardSection {
             case .focus: FocusPage()
+            case .projects: ProjectsView()
             case .todos: TodosPage()
             case .stats: StatsView()
             case .settings: SettingsView()
@@ -84,6 +87,7 @@ private struct FocusPage: View {
                 .frame(maxWidth: .infinity)
             ProgressView(value: state.progress)
                 .tint(state.phase.isBreak ? .green : .accentColor)
+            TaskPicker()
             TimerControls(large: true)
             Text(blockingSummary).font(.caption).foregroundStyle(.secondary)
         }
@@ -93,9 +97,31 @@ private struct FocusPage: View {
     }
 
     private var blockingSummary: String {
-        let apps = state.settings.blockedApps.count
+        let apps = state.activeBlockedApps.count
         let domains = state.settings.blockDomains ? state.settings.blockedDomains.count : 0
         return "Im Fokus blockiert: \(apps) \(apps == 1 ? "App" : "Apps") · \(domains) \(domains == 1 ? "Webseite" : "Webseiten")"
+    }
+
+    private struct TaskPicker: View {
+        @Environment(AppState.self) private var state
+
+        var body: some View {
+            Picker("Fokusaufgabe", selection: Binding(
+                get: { state.selectedTaskID },
+                set: { state.selectedTaskID = $0 }
+            )) {
+                Text("Kein Projekt / keine Aufgabe").tag(UUID?.none)
+                ForEach(state.projects.projects) { project in
+                    Section(project.name) {
+                        ForEach(state.todos.open.filter { $0.projectID == project.id }) { task in
+                            Text(task.title).tag(UUID?.some(task.id))
+                        }
+                    }
+                }
+            }
+            .labelsHidden()
+            .disabled(state.phase != .idle)
+        }
     }
 
     private var todayCard: some View {

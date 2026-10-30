@@ -12,6 +12,7 @@ final class AppState {
         }
     }
     let todos = TodoStore()
+    let projects = ProjectStore()
     let stats = StatsStore()
 
     private(set) var phase: Phase = .idle
@@ -25,6 +26,22 @@ final class AppState {
     private(set) var hasStaleHostsBlock = false
     private(set) var isHelperInstalled = false
     var dashboardSection: DashboardSection = .focus
+    var selectedTaskID: UUID?
+
+    var selectedTask: Todo? {
+        guard let selectedTaskID else { return nil }
+        return todos.todos.first { $0.id == selectedTaskID }
+    }
+
+    var selectedProject: Project? {
+        projects.project(selectedTask?.projectID)
+    }
+
+    var activeBlockedApps: [BlockedApp] {
+        if let taskApps = selectedTask?.blockedApps { return taskApps }
+        if let projectApps = selectedProject?.blockedApps { return projectApps }
+        return settings.blockedApps
+    }
 
     static let shortcutDescription = "⌃⌥N"
 
@@ -147,7 +164,8 @@ final class AppState {
         if !isPaused { remaining = max(0, (endDate ?? Date()).timeIntervalSinceNow) }
         // Paused time is excluded because `remaining` does not move while paused.
         stats.recordFocus(start: start, focusedSeconds: phaseDuration - remaining,
-                          plannedSeconds: phaseDuration, completed: completed)
+                          plannedSeconds: phaseDuration, completed: completed,
+                          task: selectedTask, project: selectedProject)
         focusStartedAt = nil
     }
 
@@ -180,7 +198,8 @@ final class AppState {
     private func applyBlocking(_ on: Bool) {
         if on {
             let ownID = Bundle.main.bundleIdentifier
-            appBlocker.start(bundleIDs: Set(settings.blockedApps.map(\.bundleID).filter { $0 != ownID }))
+            let apps = activeBlockedApps
+            appBlocker.start(bundleIDs: Set(apps.map(\.bundleID).filter { $0 != ownID }))
         } else {
             appBlocker.stop()
         }

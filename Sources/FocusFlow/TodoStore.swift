@@ -18,6 +18,21 @@ final class TodoStore {
         refine(placeholder)
     }
 
+    func addTask(title: String, projectID: UUID) {
+        let text = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        todos.insert(Todo(title: text, sourceNote: text, projectID: projectID), at: 0)
+        save()
+    }
+
+    func setProject(_ todoID: UUID, projectID: UUID?) {
+        mutate(todoID) { $0.projectID = projectID }
+    }
+
+    func setBlockedApps(_ apps: [BlockedApp]?, for todoID: UUID) {
+        mutate(todoID) { $0.blockedApps = apps }
+    }
+
     /// Notes that were still being refined when the app quit.
     func resumePendingRefinements() {
         todos.filter(\.isRefining).forEach(refine)

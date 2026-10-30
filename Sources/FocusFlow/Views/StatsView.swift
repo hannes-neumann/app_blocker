@@ -34,9 +34,12 @@ struct StatsView: View {
                 ChartCard(title: "Wann du dich fokussierst", subtitle: "Minuten nach Tageszeit, letzte \(range) Tage") {
                     FocusByHourChart(hours: state.stats.minutesByHour(lastDays: range))
                 }
+                TaskStatsCard(stats: state.stats.taskStats(lastDays: range))
             }
+
             .padding(24)
         }
+
         .frame(minWidth: 640, minHeight: 560)
     }
 
@@ -58,6 +61,37 @@ struct StatsView: View {
                      detail: "ganz durchgezogen", progress: sessions == 0 ? nil : Double(completed) / Double(sessions))
             StatTile(title: "Todos erledigt", value: "\(todos)", unit: "",
                      detail: "in den letzten \(range) Tagen")
+        }
+    }
+
+    private struct TaskStatsCard: View {
+        let stats: [TaskStat]
+
+        var body: some View {
+            ChartCard(title: "Fokuszeit pro Aufgabe", subtitle: "Letzte Sitzungen im gewählten Zeitraum") {
+                if stats.isEmpty {
+                    ContentUnavailableView("Noch keine Aufgaben-Sessions", systemImage: "checklist",
+                                           description: Text("Wähle vor dem Start eines Fokus eine Aufgabe aus."))
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(stats.prefix(8)) { stat in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(stat.taskTitle).lineLimit(1)
+                                    if let project = stat.projectName {
+                                        Text(project).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                Text("\(Int(stat.focusMinutes)) Min")
+                                    .font(.callout.weight(.medium))
+                                    .monospacedDigit()
+                            }
+                            if stat.id != stats.prefix(8).last?.id { Divider() }
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -13,7 +13,8 @@ passenden Pause vorgeschlagen werden.
 - **KI-Aufbereitung**: Das Apple Foundation Model (on-device) macht aus der Notiz ein oder mehrere konkrete Todos mit geschätzter Dauer.
 - **Pausenvorschlag**: Zu Beginn jeder Pause schlägt FocusFlow das längste offene Todo vor, das noch in die Pause passt.
 - **Dashboard**: ein eigenes Fenster mit Timer, allen Todos (Titel bearbeiten, Dauer anpassen, erledigen, löschen), Statistik und Einstellungen. Öffnest du es über „Dashboard“ im Menü.
-- **Statistik**: Fokuszeit pro Tag mit Tagesziel, Serie, durchgezogene Sessions, erledigte Todos und Fokuszeit nach Tageszeit, für 7 oder 30 Tage. Im Menü steht eine Kurzübersicht für heute.
+- **Projekte und Aufgaben**: Projekte mit konkreten Aufgaben anlegen, pro Projekt oder Aufgabe eigene App-Sperrlisten hinterlegen und vor dem Fokus die Aufgabe auswählen. Regeln der Aufgabe überschreiben Projektregeln, ansonsten wird die globale Regel verwendet.
+- **Statistik**: Fokuszeit pro Tag mit Tagesziel, Serie, durchgezogene Sessions, erledigte Todos, Fokuszeit nach Tageszeit und Fokuszeit pro Aufgabe, für 7 oder 30 Tage. Im Menü steht eine Kurzübersicht für heute.
 
 ## Bauen und starten
 
@@ -55,7 +56,7 @@ Benutzers und nur gültige Domainnamen. Entfernen kannst du ihn unter Einstellun
 schätzt die Dauer anhand von Stichworten. Eine Angabe wie „30 min“ oder „2h“ in der Notiz wird immer
 als Dauer übernommen. Die geschätzte Dauer lässt sich per Klick auf das Zeit-Badge ändern, entweder über eine Vorauswahl oder mit „Eigene Dauer eingeben…“ als Text („25“, „45 min“, „1h“, „1,5h“, „1:30“).
 
-Daten (Einstellungen, Todos) liegen in `~/Library/Application Support/FocusFlow/`.
+Daten (Einstellungen, Projekte, Todos und Fokus-Sessions) liegen in `~/Library/Application Support/FocusFlow/`.
 
 ## Bekannte Grenzen
 
