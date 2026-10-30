@@ -72,8 +72,10 @@ struct AISettingsView: View {
                 Spacer()
                 Button("Modell laden") { ai.pullModel() }
             case .pulling:
-                ProgressView().controlSize(.small)
-                Text("\(ai.settings.ollamaModel) wird geladen, das kann einige Minuten dauern…").foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(ai.settings.ollamaModel) wird geladen… \(Int(ai.pullProgress * 100)) %").foregroundStyle(.secondary)
+                    ProgressView(value: ai.pullProgress)
+                }
             case .ready:
                 Label("Bereit", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
             }

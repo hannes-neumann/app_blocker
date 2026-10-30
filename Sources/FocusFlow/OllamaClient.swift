@@ -48,16 +48,34 @@ struct OllamaClient {
         return reply.message.content
     }
 
-    /// Downloads a model. Returns once the download is complete, which can take minutes.
-    func pull() async throws {
-        struct Status: Decodable { let status: String }
+    /// Downloads a model and reports progress (0...1) while the data streams in.
+    func pull(progress: @escaping @MainActor (Double) -> Void) async throws {
+        struct Update: Decodable {
+            let status: String?
+            let total: Int64?
+            let completed: Int64?
+            let error: String?
+        }
         var request = URLRequest(url: baseURL.appendingPathComponent("api/pull"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: ["model": model, "stream": false])
-        request.timeoutInterval = 3600
-        let status: Status = try await send(request)
-        guard status.status == "success" else { throw Failure(message: status.status) }
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["model": model, "stream": true])
+        // Applies between received chunks, so a slow but steady download never times out.
+        request.timeoutInterval = 120
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+            throw Failure(message: "HTTP \(http.statusCode)")
+        }
+        var finished = false
+        for try await line in bytes.lines {
+            guard let update = try? JSONDecoder().decode(Update.self, from: Data(line.utf8)) else { continue }
+            if let error = update.error { throw Failure(message: error) }
+            if let total = update.total, total > 0, let completed = update.completed {
+                await progress(Double(completed) / Double(total))
+            }
+            if update.status == "success" { finished = true }
+        }
+        guard finished else { throw Failure(message: "Download abgebrochen") }
     }
 
     private struct ErrorBody: Decodable { let error: String }

@@ -64,6 +64,8 @@ final class AIEngine {
     private(set) var appleStatus: AIStatus = .unavailable("")
     private(set) var ollamaStatus: OllamaStatus = .unknown
     private(set) var pullError: String?
+    /// Download progress of the model (0...1) while `ollamaStatus` is `.pulling`.
+    private(set) var pullProgress: Double = 0
 
     private var ollama: OllamaClient? {
         guard let url = URL(string: settings.ollamaURL), url.scheme != nil else { return nil }
@@ -94,13 +96,16 @@ final class AIEngine {
     }
 
     func checkOllama() async {
+        // A running download owns the status until it is done.
+        guard ollamaStatus != .pulling else { return }
         guard let ollama else { ollamaStatus = .notRunning; return }
         ollamaStatus = .checking
         do {
             let installed = try await ollama.installedModels()
+            guard ollamaStatus != .pulling else { return }
             ollamaStatus = Self.contains(installed, settings.ollamaModel) ? .ready(installed: installed) : .modelMissing(installed: installed)
         } catch {
-            ollamaStatus = .notRunning
+            if ollamaStatus != .pulling { ollamaStatus = .notRunning }
         }
     }
 
@@ -108,8 +113,14 @@ final class AIEngine {
         guard let ollama else { return }
         pullError = nil
         ollamaStatus = .pulling
+        pullProgress = 0
         Task {
-            do { try await ollama.pull() } catch { pullError = error.localizedDescription }
+            do {
+                try await ollama.pull { [weak self] in self?.pullProgress = $0 }
+            } catch {
+                pullError = error.localizedDescription
+            }
+            ollamaStatus = .unknown
             await checkOllama()
         }
     }

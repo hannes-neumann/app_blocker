@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -42,9 +43,14 @@ enum TodoRefiner {
         Du verwandelst kurze, spontan notierte Gedanken in konkrete, umsetzbare Todos.
         Regeln:
         - Jedes Todo ist ein klarer nächster Schritt und beginnt mit einem Verb (z. B. "Anna wegen Termin anrufen").
-        - Behalte die Sprache der Notiz bei.
-        - Enthält die Notiz mehrere Aufgaben, gib mehrere Todos zurück. Erfinde keine zusätzlichen Aufgaben.
-        - Schätze realistisch, wie viele Minuten die Aufgabe dauert (ganze Zahl zwischen 1 und 480).
+        - Schreibe die Todos in der Sprache, die in der Anfrage genannt ist, und mische keine Sprachen.
+        - Ein Todo pro Aufgabe, die in der Notiz steht. Mehrere Todos nur, wenn die Notiz ausdrücklich mehrere
+          Aufgaben nennt (z. B. mit "und" oder Kommas). Zerlege eine einzelne Aufgabe nicht in Unterschritte.
+        - Verwende nur, was in der Notiz steht. Erfinde keine Namen, Personen, Orte, Adressen oder Details.
+        - Schätze realistisch, wie lange eine geübte Person für genau diesen Schritt braucht, in ganzen Minuten.
+          Richtwerte: kurze Nachricht oder Mail 5, Anruf oder Termin ausmachen 10, Einkauf 15,
+          Logs durchsehen 20, Unterlagen sortieren 30, kleinen Bug beheben 45, Text- oder Blogentwurf 60,
+          Präsentation vorbereiten 90, Kapitel einer Abschlussarbeit überarbeiten 120.
         - Antworte ausschließlich mit JSON ohne weiteren Text, z. B.:
           {"todos": [{"title": "Rechnung an Kunde X schicken", "minutes": 5}]}
         """
@@ -68,7 +74,7 @@ enum TodoRefiner {
         #if canImport(FoundationModels)
         if #available(macOS 26, *) {
             let session = LanguageModelSession(instructions: instructions)
-            guard let response = try? await session.respond(to: "Notiz: \(note)", options: GenerationOptions(temperature: 0.2))
+            guard let response = try? await session.respond(to: prompt(for: note), options: GenerationOptions(temperature: 0))
             else { return nil }
             return finish(parse(response.content), note: note)
         }
@@ -77,8 +83,21 @@ enum TodoRefiner {
     }
 
     static func refineWithOllama(_ note: String, client: OllamaClient) async -> [RefinedTodo]? {
-        guard let text = try? await client.chat(system: instructions, user: "Notiz: \(note)", schema: schema) else { return nil }
+        // One retry: the first request after a while has to load the model, which can fail on a busy Mac.
+        var text = try? await client.chat(system: instructions, user: prompt(for: note), schema: schema, temperature: 0)
+        if text == nil { text = try? await client.chat(system: instructions, user: prompt(for: note), schema: schema, temperature: 0) }
+        guard let text else { return nil }
         return finish(parse(text), note: note)
+    }
+
+    /// Names the note's language explicitly: small models otherwise answer in the language of the instructions.
+    private static func prompt(for note: String) -> String {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.languageConstraints = [.german, .english, .french, .spanish, .italian, .dutch]
+        recognizer.processString(note)
+        let language = recognizer.dominantLanguage
+            .flatMap { Locale(identifier: "de").localizedString(forLanguageCode: $0.rawValue) } ?? "Deutsch"
+        return "Sprache der Todos: \(language)\nNotiz: \(note)"
     }
 
     /// Clamps the model's estimates. A duration the user typed themselves beats the model's guess.
