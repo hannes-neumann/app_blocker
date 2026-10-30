@@ -24,6 +24,7 @@ final class AppState {
     private(set) var domainBlockError: String?
     private(set) var hasStaleHostsBlock = false
     private(set) var isHelperInstalled = false
+    var dashboardSection: DashboardSection = .focus
 
     static let shortcutDescription = "⌃⌥N"
 

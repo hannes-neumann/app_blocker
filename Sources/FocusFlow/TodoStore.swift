@@ -45,6 +45,12 @@ final class TodoStore {
         mutate(id) { $0.estimatedMinutes = minutes }
     }
 
+    func setTitle(_ id: UUID, title: String) {
+        let text = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        mutate(id) { $0.title = text }
+    }
+
     func delete(_ id: UUID) {
         todos.removeAll { $0.id == id }
         save()

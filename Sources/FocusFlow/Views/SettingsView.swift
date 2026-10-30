@@ -3,19 +3,27 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Environment(AppState.self) private var state
+    @State private var tab = 0
 
     var body: some View {
         @Bindable var state = state
-        TabView {
-            TimerSettingsView(settings: $state.settings)
-                .tabItem { Label("Timer", systemImage: "timer") }
-            BlockingSettingsView(settings: $state.settings)
-                .tabItem { Label("Blockieren", systemImage: "hand.raised") }
-            GeneralSettingsView(aiStatus: state.aiStatus)
-                .tabItem { Label("Allgemein", systemImage: "gearshape") }
+        VStack(spacing: 0) {
+            Picker("Bereich", selection: $tab) {
+                Label("Timer", systemImage: "timer").tag(0)
+                Label("Blockieren", systemImage: "hand.raised").tag(1)
+                Label("Allgemein", systemImage: "gearshape").tag(2)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .padding(.top, 8)
+
+            switch tab {
+            case 0: TimerSettingsView(settings: $state.settings)
+            case 1: BlockingSettingsView(settings: $state.settings)
+            default: GeneralSettingsView(aiStatus: state.aiStatus)
+            }
         }
-        .padding()
-        .frame(width: 480, height: 460)
     }
 }
 
@@ -24,14 +32,12 @@ private struct TimerSettingsView: View {
 
     var body: some View {
         Form {
-            Stepper("Fokus: \(settings.focusMinutes) Min", value: $settings.focusMinutes, in: 1...180)
-            Stepper("Kurze Pause: \(settings.shortBreakMinutes) Min", value: $settings.shortBreakMinutes, in: 1...60)
-            Stepper("Lange Pause: \(settings.longBreakMinutes) Min", value: $settings.longBreakMinutes, in: 1...120)
-            Stepper("Lange Pause nach \(settings.sessionsUntilLongBreak) Runden",
-                    value: $settings.sessionsUntilLongBreak, in: 1...12)
+            NumberField(title: "Fokus", value: $settings.focusMinutes, range: 1...180)
+            NumberField(title: "Kurze Pause", value: $settings.shortBreakMinutes, range: 1...60)
+            NumberField(title: "Lange Pause", value: $settings.longBreakMinutes, range: 1...120)
+            NumberField(title: "Lange Pause nach", value: $settings.sessionsUntilLongBreak, range: 1...12, unit: "Runden")
             Toggle("Nach der Pause automatisch weiterfokussieren", isOn: $settings.autoStartFocus)
-            Stepper("Tagesziel: \(settings.dailyGoalMinutes) Min Fokus",
-                    value: $settings.dailyGoalMinutes, in: 25...600, step: 25)
+            NumberField(title: "Tagesziel", value: $settings.dailyGoalMinutes, range: 5...600, step: 25, unit: "Min Fokus")
         }
         .formStyle(.grouped)
     }

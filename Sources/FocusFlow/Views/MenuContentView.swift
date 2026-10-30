@@ -25,7 +25,7 @@ struct MenuContentView: View {
         VStack(alignment: .leading, spacing: 14) {
             timerSection
             todaySummary
-            warnings
+            BlockingWarnings()
             if state.phase.isBreak { suggestionSection }
             Divider()
             todoSection
@@ -56,26 +56,7 @@ struct MenuContentView: View {
             ProgressView(value: state.progress)
                 .tint(state.phase.isBreak ? .green : .accentColor)
 
-            HStack {
-                if state.phase == .idle {
-                    Button { state.startFocus() } label: {
-                        Label("Fokus starten", systemImage: "play.fill").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                } else {
-                    Button { state.togglePause() } label: {
-                        Label(state.isPaused ? "Weiter" : "Pause", systemImage: state.isPaused ? "play.fill" : "pause.fill")
-                    }
-                    Button { state.skipPhase() } label: {
-                        Label("Überspringen", systemImage: "forward.end.fill")
-                    }
-                    Spacer()
-                    Button(role: .destructive) { state.stop() } label: {
-                        Label("Stopp", systemImage: "stop.fill")
-                    }
-                }
-            }
+            TimerControls()
         }
     }
 
@@ -85,7 +66,7 @@ struct MenuContentView: View {
         let streak = state.stats.streak
         return Button {
             dismiss()
-            state.panels.showStats()
+            state.panels.showDashboard(.stats)
         } label: {
             HStack(spacing: 10) {
                 Gauge(value: Double(min(today, goal)), in: 0...Double(max(goal, 1))) { EmptyView() }
@@ -108,29 +89,6 @@ struct MenuContentView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private var warnings: some View {
-        if let error = state.domainBlockError, !state.isHelperInstalled {
-            VStack(alignment: .leading, spacing: 6) {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                Button("Helfer installieren (einmalig)") { state.installHelper() }
-                    .controlSize(.small)
-            }
-        }
-        if state.hasStaleHostsBlock && state.phase == .idle {
-            HStack {
-                Label("Alte Webseiten-Sperre aktiv", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                Spacer()
-                Button("Aufheben") { state.removeStaleHostsBlock() }
-                    .controlSize(.small)
-            }
-        }
     }
 
     private var suggestionSection: some View {
@@ -206,9 +164,13 @@ struct MenuContentView: View {
 
     private var footer: some View {
         HStack {
+            Button("Dashboard") {
+                dismiss()
+                state.panels.showDashboard(.focus)
+            }
             Button("Einstellungen…") {
                 dismiss()
-                state.panels.showSettings()
+                state.panels.showDashboard(.settings)
             }
             Spacer()
             Button("Beenden") { NSApp.terminate(nil) }
@@ -225,11 +187,10 @@ struct TodoRow: View {
     @Environment(AppState.self) private var state
     let todo: Todo
     @State private var hovering = false
-
-    private static let estimateOptions = [2, 5, 10, 15, 20, 30, 45, 60, 90, 120]
+    @State private var expanded = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Button { state.todos.toggleDone(todo.id) } label: {
                 Image(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(todo.isDone ? .green : .secondary)
@@ -237,11 +198,22 @@ struct TodoRow: View {
             .buttonStyle(.plain)
             .disabled(todo.isRefining)
 
-            Text(todo.title)
-                .strikethrough(todo.isDone)
-                .foregroundStyle(todo.isDone ? .secondary : .primary)
-                .lineLimit(2)
-                .help(todo.sourceNote)
+            // Tooltips don't show while a menu-bar app is inactive, so a click reveals the full text instead.
+            VStack(alignment: .leading, spacing: 2) {
+                Text(todo.title)
+                    .strikethrough(todo.isDone)
+                    .foregroundStyle(todo.isDone ? .secondary : .primary)
+                    .lineLimit(expanded ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: expanded)
+                if expanded && todo.sourceNote != todo.title {
+                    Text("Notiz: \(todo.sourceNote)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { expanded.toggle() }
 
             Spacer(minLength: 4)
 
@@ -254,17 +226,7 @@ struct TodoRow: View {
                         .foregroundStyle(.purple)
                         .help("Von Apple Intelligence formuliert und geschätzt")
                 }
-                Menu {
-                    ForEach(Self.estimateOptions, id: \.self) { minutes in
-                        Button(formatMinutes(minutes)) { state.todos.setEstimate(todo.id, minutes: minutes) }
-                    }
-                } label: {
-                    EstimateBadge(minutes: todo.estimatedMinutes ?? 0)
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help("Geschätzte Dauer anpassen")
+                EstimateControl(todo: todo)
             }
 
             // Always laid out and only faded in, so hovering never changes the row's size

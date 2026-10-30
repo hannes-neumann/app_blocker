@@ -58,8 +58,7 @@ final class PanelController {
     private let capturePanel = FloatingPanel(closesOnResignKey: true)
     private let breakPanel = FloatingPanel(closesOnResignKey: false)
     private let hudPanel = FloatingPanel(closesOnResignKey: false)
-    private var settingsWindow: NSWindow?
-    private var statsWindow: NSWindow?
+    private var dashboardWindow: NSWindow?
     private var hudWorkItem: DispatchWorkItem?
 
     init(state: AppState) {
@@ -101,25 +100,29 @@ final class PanelController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: item)
     }
 
-    func showSettings() {
-        settingsWindow = show(settingsWindow, title: "FocusFlow Einstellungen", resizable: false, SettingsView())
-    }
-
-    func showStats() {
-        statsWindow = show(statsWindow, title: "FocusFlow Statistik", resizable: true, StatsView())
-    }
-
-    private func show<V: View>(_ existing: NSWindow?, title: String, resizable: Bool, _ view: V) -> NSWindow {
-        let window = existing ?? {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: view.environment(state)))
-            window.title = title
-            window.styleMask = resizable ? [.titled, .closable, .resizable, .miniaturizable] : [.titled, .closable]
-            window.isReleasedWhenClosed = false
-            window.center()
-            return window
-        }()
+    func showDashboard(_ section: DashboardSection) {
+        state.dashboardSection = section
+        let window = dashboardWindow ?? makeDashboardWindow()
+        dashboardWindow = window
+        // Show up in the Dock and app switcher while the dashboard is open.
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    private func makeDashboardWindow() -> NSWindow {
+        let hosting = NSHostingController(rootView: DashboardView().environment(state))
+        hosting.sizingOptions = [.minSize]
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "FocusFlow"
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
+        window.isReleasedWhenClosed = false
+        window.setContentSize(NSSize(width: 1000, height: 720))
+        window.center()
+        window.setFrameAutosaveName("FocusFlowDashboard")
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
+            NSApp.setActivationPolicy(.accessory)
+        }
         return window
     }
 }
