@@ -10,7 +10,7 @@ passenden Pause vorgeschlagen werden.
 - **App-Blocker**: Ausgewählte Apps werden während der Fokuszeit beendet und beim erneuten Öffnen sofort wieder geschlossen.
 - **Webseiten-Blocker**: Domains werden systemweit über `/etc/hosts` gesperrt (gilt für alle Browser).
 - **Schnellnotiz** mit `⌃⌥N`: ein schwebendes Textfeld, egal in welcher App du gerade bist. Mit Enter speichern, mit Esc schließen.
-- **KI-Aufbereitung**: Das Apple Foundation Model (on-device) macht aus der Notiz ein oder mehrere konkrete Todos mit geschätzter Dauer.
+- **KI-Aufbereitung**: Ein Sprachmodell auf deinem Mac (Apple Foundation Model oder ein Ollama-Modell) macht aus der Notiz ein oder mehrere konkrete Todos mit geschätzter Dauer.
 - **Pausenvorschlag**: Zu Beginn jeder Pause schlägt FocusFlow das längste offene Todo vor, das noch in die Pause passt.
 - **Dashboard**: ein eigenes Fenster mit Timer, allen Todos (Titel bearbeiten, Dauer anpassen, erledigen, löschen), Statistik und Einstellungen. Öffnest du es über „Dashboard“ im Menü.
 - **Statistik**: Fokuszeit pro Tag mit Tagesziel, Serie, durchgezogene Sessions, erledigte Todos und Fokuszeit nach Tageszeit, für 7 oder 30 Tage. Im Menü steht eine Kurzübersicht für heute.
@@ -40,7 +40,7 @@ Für die Entwicklung reicht auch `swift build`. Das fertige `.app`-Bundle brauch
 | Todos & Vorschlag | `TodoStore.swift` |
 | Statistik | `StatsStore.swift`, `Views/StatsView.swift` (Swift Charts) |
 | Dashboard | `Views/DashboardView.swift` |
-| KI | `TodoRefiner.swift` |
+| KI | `AIEngine.swift` (Auswahl des Modells), `OllamaClient.swift`, `TodoRefiner.swift` (Anweisungen, Stichwort-Schätzung) |
 
 **Webseiten-Sperre:** Beim ersten Fokus installiert FocusFlow einmalig einen kleinen Systemdienst
 (`/Library/LaunchDaemons/com.hannesneumann.FocusFlow.blocker.plist`). Dafür fragt macOS ein einziges Mal
@@ -50,10 +50,23 @@ Block in `/etc/hosts`. Beendest du die App oder stürzt sie ab, verschwindet die
 Sekunden, und beim Systemstart räumt der Dienst Reste auf. Er akzeptiert nur reguläre Dateien deines
 Benutzers und nur gültige Domainnamen. Entfernen kannst du ihn unter Einstellungen → Blockieren.
 
-**KI:** Das Foundation Model gibt es erst ab **macOS 26 mit aktivierter Apple Intelligence**. Auf
-älteren Systemen oder ohne Apple Intelligence übernimmt FocusFlow die Notiz direkt als Todo und
-schätzt die Dauer anhand von Stichworten. Eine Angabe wie „30 min“ oder „2h“ in der Notiz wird immer
-als Dauer übernommen. Die geschätzte Dauer lässt sich per Klick auf das Zeit-Badge ändern, entweder über eine Vorauswahl oder mit „Eigene Dauer eingeben…“ als Text („25“, „45 min“, „1h“, „1,5h“, „1:30“).
+**KI:** Unter Einstellungen → KI wählst du das Modell. „Automatisch“ nimmt Apple Intelligence
+(erst ab **macOS 26** mit aktivierter Apple Intelligence) und sonst **Ollama**, das offene Modelle lokal
+ausführt. So richtest du Ollama ein:
+
+```bash
+brew install ollama
+```
+
+```bash
+ollama serve
+```
+
+Das Modell (Standard `gemma3:4b`, etwa 3 GB) lädst du danach in den Einstellungen per „Modell laden“. Läuft
+keins von beiden, übernimmt FocusFlow die Notiz direkt als Todo und schätzt die Dauer anhand von Stichworten.
+Eine Angabe wie „30 min“ oder „2h“ in der Notiz wird immer als Dauer übernommen. Die geschätzte Dauer lässt
+sich per Klick auf das Zeit-Badge ändern, entweder über eine Vorauswahl oder mit „Eigene Dauer eingeben…“
+als Text („25“, „45 min“, „1h“, „1,5h“, „1:30“).
 
 Daten (Einstellungen, Todos) liegen in `~/Library/Application Support/FocusFlow/`.
 

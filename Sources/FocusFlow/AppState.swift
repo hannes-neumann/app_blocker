@@ -13,6 +13,7 @@ final class AppState {
     }
     let todos = TodoStore()
     let stats = StatsStore()
+    let ai = AIEngine()
 
     private(set) var phase: Phase = .idle
     private(set) var remaining: TimeInterval = 0
@@ -20,7 +21,6 @@ final class AppState {
     private(set) var isPaused = false
     private(set) var completedFocusSessions = 0
     private(set) var suggestion: Todo?
-    private(set) var aiStatus: AIStatus = .unavailable("")
     private(set) var domainBlockError: String?
     private(set) var hasStaleHostsBlock = false
     private(set) var isHelperInstalled = false
@@ -54,7 +54,8 @@ final class AppState {
 
     func setup() {
         panels = PanelController(state: self)
-        aiStatus = TodoRefiner.status
+        ai.refreshStatus()
+        todos.refiner = { [ai] note in await ai.refine(note) }
         refreshHelperStatus()
         syncDomains()
         domainBlocker.setBlocking(false)

@@ -11,6 +11,7 @@ struct SettingsView: View {
             Picker("Bereich", selection: $tab) {
                 Label("Timer", systemImage: "timer").tag(0)
                 Label("Blockieren", systemImage: "hand.raised").tag(1)
+                Label("KI", systemImage: "sparkles").tag(3)
                 Label("Allgemein", systemImage: "gearshape").tag(2)
             }
             .pickerStyle(.segmented)
@@ -21,7 +22,8 @@ struct SettingsView: View {
             switch tab {
             case 0: TimerSettingsView(settings: $state.settings)
             case 1: BlockingSettingsView(settings: $state.settings)
-            default: GeneralSettingsView(aiStatus: state.aiStatus)
+            case 3: AISettingsView(ai: state.ai)
+            default: GeneralSettingsView()
             }
         }
     }
@@ -185,8 +187,6 @@ private struct AppIcon: View {
 }
 
 private struct GeneralSettingsView: View {
-    let aiStatus: AIStatus
-
     var body: some View {
         Form {
             Section("Schnellnotiz") {
@@ -194,18 +194,6 @@ private struct GeneralSettingsView: View {
                 Text("Öffnet überall ein kleines Textfeld. Deine Notiz wird zu einem konkreten Todo mit geschätzter Dauer, das dir in einer passenden Pause vorgeschlagen wird.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-            Section("Apple Intelligence") {
-                switch aiStatus {
-                case .available:
-                    Label("Aktiv: Notizen werden mit dem Apple Foundation Model aufbereitet.", systemImage: "sparkles")
-                        .foregroundStyle(.purple)
-                case .unavailable(let reason):
-                    Label(reason, systemImage: "exclamationmark.circle")
-                    Text("Bis dahin übernimmt FocusFlow deine Notiz als Todo und schätzt die Dauer anhand von Stichworten. Angaben wie „30 min“ oder „2h“ in der Notiz werden immer übernommen.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
         }
         .formStyle(.grouped)

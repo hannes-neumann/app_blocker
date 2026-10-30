@@ -5,6 +5,9 @@ import Observation
 final class TodoStore {
     private(set) var todos: [Todo] = Storage.load([Todo].self, from: "todos.json") ?? []
     @ObservationIgnored var onCompletionChange: ((Todo) -> Void)?
+    @ObservationIgnored var refiner: (String) async -> (todos: [RefinedTodo], usedAI: Bool) = { note in
+        ([TodoRefiner.heuristic(note)], false)
+    }
 
     var open: [Todo] { todos.filter { !$0.isDone } }
     var done: [Todo] { todos.filter(\.isDone).sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) } }
@@ -25,7 +28,7 @@ final class TodoStore {
 
     private func refine(_ placeholder: Todo) {
         Task {
-            let result = await TodoRefiner.refine(placeholder.sourceNote)
+            let result = await refiner(placeholder.sourceNote)
             guard let index = todos.firstIndex(where: { $0.id == placeholder.id }) else { return }
             let refined = result.todos.map {
                 Todo(title: $0.title, estimatedMinutes: $0.minutes, sourceNote: placeholder.sourceNote,

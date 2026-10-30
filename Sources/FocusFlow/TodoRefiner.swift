@@ -15,10 +15,10 @@ enum AIStatus: Equatable {
     var isAvailable: Bool { self == .available }
 }
 
-/// Turns a quick note into concrete todos with a duration estimate.
-/// Uses Apple's on-device Foundation Model when available and a keyword heuristic otherwise.
+/// Turns a quick note into concrete todos with a duration estimate, with a language model
+/// (see `AIEngine`) or a keyword heuristic.
 enum TodoRefiner {
-    static var status: AIStatus {
+    static var appleStatus: AIStatus {
         #if canImport(FoundationModels)
         if #available(macOS 26, *) {
             switch SystemLanguageModel.default.availability {
@@ -38,20 +38,6 @@ enum TodoRefiner {
         return .unavailable("Benötigt macOS 26 mit Apple Intelligence.")
     }
 
-    static func refine(_ note: String) async -> (todos: [RefinedTodo], usedAI: Bool) {
-        let explicit = explicitMinutes(in: note)
-        #if canImport(FoundationModels)
-        if #available(macOS 26, *), status.isAvailable,
-           var todos = try? await refineWithModel(note), !todos.isEmpty {
-            // A duration the user typed themselves beats the model's guess.
-            if let explicit, todos.count == 1 { todos[0].minutes = explicit }
-            return (todos.map { RefinedTodo(title: $0.title, minutes: clamp($0.minutes)) }, true)
-        }
-        #endif
-        return ([heuristic(note, explicit: explicit)], false)
-    }
-
-    #if canImport(FoundationModels)
     private static let instructions = """
         Du verwandelst kurze, spontan notierte Gedanken in konkrete, umsetzbare Todos.
         Regeln:
@@ -59,20 +45,48 @@ enum TodoRefiner {
         - Behalte die Sprache der Notiz bei.
         - Enthält die Notiz mehrere Aufgaben, gib mehrere Todos zurück. Erfinde keine zusätzlichen Aufgaben.
         - Schätze realistisch, wie viele Minuten die Aufgabe dauert (ganze Zahl zwischen 1 und 480).
-        - Antworte ausschließlich mit einem JSON-Array ohne weiteren Text, z. B.:
-          [{"title": "Rechnung an Kunde X schicken", "minutes": 5}]
+        - Antworte ausschließlich mit JSON ohne weiteren Text, z. B.:
+          {"todos": [{"title": "Rechnung an Kunde X schicken", "minutes": 5}]}
         """
 
-    @available(macOS 26, *)
-    private static func refineWithModel(_ note: String) async throws -> [RefinedTodo]? {
-        let session = LanguageModelSession(instructions: instructions)
-        let response = try await session.respond(
-            to: "Notiz: \(note)",
-            options: GenerationOptions(temperature: 0.2)
-        )
-        return parse(response.content)
+    private static let schema: [String: Any] = [
+        "type": "object",
+        "properties": [
+            "todos": [
+                "type": "array",
+                "items": [
+                    "type": "object",
+                    "properties": ["title": ["type": "string"], "minutes": ["type": "integer"]],
+                    "required": ["title", "minutes"],
+                ],
+            ],
+        ],
+        "required": ["todos"],
+    ]
+
+    static func refineWithApple(_ note: String) async -> [RefinedTodo]? {
+        #if canImport(FoundationModels)
+        if #available(macOS 26, *) {
+            let session = LanguageModelSession(instructions: instructions)
+            guard let response = try? await session.respond(to: "Notiz: \(note)", options: GenerationOptions(temperature: 0.2))
+            else { return nil }
+            return finish(parse(response.content), note: note)
+        }
+        #endif
+        return nil
     }
-    #endif
+
+    static func refineWithOllama(_ note: String, client: OllamaClient) async -> [RefinedTodo]? {
+        guard let text = try? await client.chat(system: instructions, user: "Notiz: \(note)", schema: schema) else { return nil }
+        return finish(parse(text), note: note)
+    }
+
+    /// Clamps the model's estimates. A duration the user typed themselves beats the model's guess.
+    private static func finish(_ todos: [RefinedTodo]?, note: String) -> [RefinedTodo]? {
+        guard var todos, !todos.isEmpty else { return nil }
+        if let explicit = explicitMinutes(in: note), todos.count == 1 { todos[0].minutes = explicit }
+        return todos.map { RefinedTodo(title: $0.title, minutes: clamp($0.minutes)) }
+    }
 
     static func parse(_ text: String) -> [RefinedTodo]? {
         guard let start = text.firstIndex(of: "["), let end = text.lastIndex(of: "]"), start < end else { return nil }
@@ -91,7 +105,8 @@ enum TodoRefiner {
         (["entwurf", "konzept", "präsentation", "bericht", "artikel", "planen"], 45),
     ]
 
-    private static func heuristic(_ note: String, explicit: Int?) -> RefinedTodo {
+    static func heuristic(_ note: String) -> RefinedTodo {
+        let explicit = explicitMinutes(in: note)
         // Drop a typed duration like "(20 min)" from the title; it already becomes the estimate.
         let withoutDuration = note
             .replacingOccurrences(of: #"\(?\s*\d+\s*(minuten|minutes|min|m|stunden|std|hours|h)\b\s*\)?"#,

@@ -224,7 +224,7 @@ struct TodoRow: View {
                     Image(systemName: "sparkles")
                         .font(.caption)
                         .foregroundStyle(.purple)
-                        .help("Von Apple Intelligence formuliert und geschätzt")
+                        .help("Von der KI formuliert und geschätzt")
                 }
                 EstimateControl(todo: todo)
             }
