@@ -71,6 +71,7 @@ final class AppState {
         if phase == .focus { recordFocus(completed: false) }
         appBlocker.stop()
         domainBlocker.setBlocking(false)
+        ai.shutdown()
     }
 
     // MARK: - Timer

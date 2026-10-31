@@ -52,17 +52,14 @@ Benutzers und nur gültige Domainnamen. Entfernen kannst du ihn unter Einstellun
 
 **KI:** Unter Einstellungen → KI wählst du das Modell. „Automatisch“ nimmt Apple Intelligence
 (erst ab **macOS 26** mit aktivierter Apple Intelligence) und sonst **Ollama**, das offene Modelle lokal
-ausführt. So richtest du Ollama ein:
+ausführt. Ollama installierst du einmal mit:
 
 ```bash
 brew install ollama
 ```
 
-```bash
-ollama serve
-```
-
-Das Modell (Standard `gemma3:4b`, etwa 3 GB) lädst du danach in den Einstellungen per „Modell laden“. Läuft
+FocusFlow startet Ollama beim Öffnen und beendet es beim Schließen wieder, außer es lief schon vorher (abschaltbar
+unter Einstellungen → KI). Das Modell (Standard `gemma3:4b`, etwa 3 GB) lädst du danach in den Einstellungen per „Modell laden“. Läuft
 keins von beiden, übernimmt FocusFlow die Notiz direkt als Todo und schätzt die Dauer anhand von Stichworten.
 Eine Angabe wie „30 min“ oder „2h“ in der Notiz wird immer als Dauer übernommen. Die geschätzte Dauer lässt
 sich per Klick auf das Zeit-Badge ändern, entweder über eine Vorauswahl oder mit „Eigene Dauer eingeben…“

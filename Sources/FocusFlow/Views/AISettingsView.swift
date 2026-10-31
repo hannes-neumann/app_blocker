@@ -19,13 +19,14 @@ struct AISettingsView: View {
             }
 
             Section {
+                Toggle("Mit FocusFlow starten und beenden", isOn: $ai.settings.startOllama)
                 TextField("Adresse", text: $ai.settings.ollamaURL)
                 modelRow
                 statusRow
             } header: {
                 Text("Ollama")
             } footer: {
-                Text("Ollama führt offene Sprachmodelle direkt auf deinem Mac aus, deine Notizen verlassen ihn nicht. Installieren mit „brew install ollama“ und starten mit „ollama serve“ (oder die Ollama-App von ollama.com öffnen).")
+                Text("Ollama führt offene Sprachmodelle direkt auf deinem Mac aus, deine Notizen verlassen ihn nicht. Installieren mit „brew install ollama“. FocusFlow startet Ollama beim Öffnen und beendet es beim Schließen wieder, außer es lief schon vorher.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -66,7 +67,8 @@ struct AISettingsView: View {
                 ProgressView().controlSize(.small)
                 Text("Verbindung wird geprüft…").foregroundStyle(.secondary)
             case .notRunning:
-                Label("Ollama läuft nicht", systemImage: "xmark.circle").foregroundStyle(.secondary)
+                Label(AIEngine.ollamaExecutable == nil ? "Ollama ist nicht installiert" : "Ollama läuft nicht",
+                      systemImage: "xmark.circle").foregroundStyle(.secondary)
             case .modelMissing:
                 Label("\(ai.settings.ollamaModel) ist nicht geladen", systemImage: "arrow.down.circle").foregroundStyle(.orange)
                 Spacer()

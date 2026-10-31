@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Observation
 
@@ -19,6 +20,8 @@ struct AISettings: Codable, Equatable {
     var provider = AIProvider.automatic
     var ollamaURL = "http://localhost:11434"
     var ollamaModel = "gemma3:4b"
+    /// Run a local `ollama serve` only while FocusFlow is open.
+    var startOllama = true
 
     init() {}
 
@@ -28,6 +31,7 @@ struct AISettings: Codable, Equatable {
         provider = (try? c.decodeIfPresent(AIProvider.self, forKey: .provider)) ?? d.provider
         ollamaURL = try c.decodeIfPresent(String.self, forKey: .ollamaURL) ?? d.ollamaURL
         ollamaModel = try c.decodeIfPresent(String.self, forKey: .ollamaModel) ?? d.ollamaModel
+        startOllama = try c.decodeIfPresent(Bool.self, forKey: .startOllama) ?? d.startOllama
     }
 }
 
@@ -56,7 +60,10 @@ final class AIEngine {
     var settings: AISettings = Storage.load(AISettings.self, from: "ai.json") ?? AISettings() {
         didSet {
             Storage.save(settings, to: "ai.json")
-            if settings.ollamaURL != oldValue.ollamaURL || settings.ollamaModel != oldValue.ollamaModel {
+            if !settings.startOllama { stopOwnedOllama() }
+            if settings.provider != oldValue.provider || settings.startOllama != oldValue.startOllama {
+                Task { await startOllamaIfNeeded() }
+            } else if settings.ollamaURL != oldValue.ollamaURL || settings.ollamaModel != oldValue.ollamaModel {
                 Task { await checkOllama() }
             }
         }
@@ -66,6 +73,14 @@ final class AIEngine {
     private(set) var pullError: String?
     /// Download progress of the model (0...1) while `ollamaStatus` is `.pulling`.
     private(set) var pullProgress: Double = 0
+    /// The `ollama serve` FocusFlow started itself and stops again on quit.
+    @ObservationIgnored private var ownedOllamaPID: pid_t?
+
+    static let ollamaExecutable: URL? = [
+        "/opt/homebrew/bin/ollama", "/usr/local/bin/ollama", "/Applications/Ollama.app/Contents/Resources/ollama",
+    ].map(URL.init(fileURLWithPath:)).first { FileManager.default.isExecutableFile(atPath: $0.path) }
+
+    private static let pidFile = Storage.directory.appendingPathComponent("ollama.pid")
 
     private var ollama: OllamaClient? {
         guard let url = URL(string: settings.ollamaURL), url.scheme != nil else { return nil }
@@ -92,7 +107,67 @@ final class AIEngine {
 
     func refreshStatus() {
         appleStatus = TodoRefiner.appleStatus
-        Task { await checkOllama() }
+        adoptLeftoverOllama()
+        Task {
+            await startOllamaIfNeeded()
+            await checkOllama()
+        }
+    }
+
+    func shutdown() {
+        stopOwnedOllama()
+    }
+
+    // MARK: - Running Ollama alongside the app
+
+    private var wantsOllama: Bool {
+        settings.provider == .ollama || (settings.provider == .automatic && !appleStatus.isAvailable)
+    }
+
+    /// Starts `ollama serve` unless one is already running (for example the Ollama app).
+    func startOllamaIfNeeded() async {
+        guard settings.startOllama, wantsOllama, ownedOllamaPID == nil, let exe = Self.ollamaExecutable,
+              let url = URL(string: settings.ollamaURL), ["localhost", "127.0.0.1"].contains(url.host) else { return }
+        await checkOllama()
+        guard ollamaStatus == .notRunning else { return }
+
+        let process = Process()
+        process.executableURL = exe
+        process.arguments = ["serve"]
+        var environment = ProcessInfo.processInfo.environment
+        environment["OLLAMA_HOST"] = "127.0.0.1:\(url.port ?? 11434)"
+        process.environment = environment
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return }
+        ownedOllamaPID = process.processIdentifier
+        try? String(process.processIdentifier).write(to: Self.pidFile, atomically: true, encoding: .utf8)
+
+        // The server needs a moment before it answers.
+        for _ in 0..<40 {
+            try? await Task.sleep(for: .milliseconds(250))
+            await checkOllama()
+            if ollamaStatus != .notRunning { break }
+        }
+    }
+
+    private func stopOwnedOllama() {
+        guard let pid = ownedOllamaPID else { return }
+        kill(pid, SIGTERM)
+        ownedOllamaPID = nil
+        try? FileManager.default.removeItem(at: Self.pidFile)
+    }
+
+    /// After a crash, the server FocusFlow started is still running. Take it over so quitting stops it.
+    private func adoptLeftoverOllama() {
+        guard let text = try? String(contentsOf: Self.pidFile, encoding: .utf8), let pid = pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        else { return }
+        var name = [CChar](repeating: 0, count: 256)
+        if proc_name(pid, &name, UInt32(name.count)) > 0, String(cString: name) == "ollama" {
+            ownedOllamaPID = pid
+        } else {
+            try? FileManager.default.removeItem(at: Self.pidFile)
+        }
     }
 
     func checkOllama() async {
@@ -127,7 +202,8 @@ final class AIEngine {
 
     func refine(_ note: String) async -> (todos: [RefinedTodo], usedAI: Bool) {
         // Ollama may have been started since the last check.
-        if !ollamaStatus.isReady && [.automatic, .ollama].contains(settings.provider) && !appleStatus.isAvailable {
+        if !ollamaStatus.isReady && wantsOllama {
+            await startOllamaIfNeeded()
             await checkOllama()
         }
         switch effectiveProvider {
