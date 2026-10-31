@@ -41,7 +41,8 @@ struct OllamaClient {
         var request = URLRequest(url: baseURL.appendingPathComponent("api/chat"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        // Sorted keys keep the schema's property order, and with it the order the model writes fields in, stable.
+        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: .sortedKeys)
         // Loading a model into memory the first time can take a while.
         request.timeoutInterval = 120
         let reply: Reply = try await send(request)

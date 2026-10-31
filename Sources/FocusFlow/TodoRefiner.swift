@@ -39,7 +39,7 @@ enum TodoRefiner {
         return .unavailable("Benötigt macOS 26 mit Apple Intelligence.")
     }
 
-    private static let instructions = """
+    static let instructions = """
         Du verwandelst kurze, spontan notierte Gedanken in konkrete, umsetzbare Todos.
         Regeln:
         - Jedes Todo ist ein klarer nächster Schritt und beginnt mit einem Verb (z. B. "Anna wegen Termin anrufen").
@@ -47,23 +47,43 @@ enum TodoRefiner {
         - Ein Todo pro Aufgabe, die in der Notiz steht. Mehrere Todos nur, wenn die Notiz ausdrücklich mehrere
           Aufgaben nennt (z. B. mit "und" oder Kommas). Zerlege eine einzelne Aufgabe nicht in Unterschritte.
         - Verwende nur, was in der Notiz steht. Erfinde keine Namen, Personen, Orte, Adressen oder Details.
-        - Schätze realistisch, wie lange eine geübte Person für genau diesen Schritt braucht, in ganzen Minuten.
-          Richtwerte: kurze Nachricht oder Mail 5, Anruf oder Termin ausmachen 10, Einkauf 15,
-          Logs durchsehen 20, Unterlagen sortieren 30, kleinen Bug beheben 45, Text- oder Blogentwurf 60,
-          Präsentation vorbereiten 90, Kapitel einer Abschlussarbeit überarbeiten 120.
+        - Der Titel beschreibt dieselbe Aufgabe wie die Notiz, nur klarer formuliert. Ersetze sie nicht durch
+          einen anderen Schritt (aus "Flug buchen" wird "Flug nach Berlin buchen", nicht "Flugpreise vergleichen").
+        - Zerlege jede Aufgabe gedanklich in 2 bis 5 kleine Arbeitsschritte und schätze für jeden Schritt,
+          wie viele Minuten eine geübte Person realistisch braucht. Sei genau, runde nicht auf 5er-Schritte.
+          Rechne Wege, Warten und Vorbereitung mit ein. Bei großen Aufgaben (Präsentation, Kapitel überarbeiten,
+          Feature bauen) dauern einzelne Schritte oft 20 bis 60 Minuten, bei kleinen (Mail, Anruf) nur 1 bis 5.
         - Antworte ausschließlich mit JSON ohne weiteren Text, z. B.:
-          {"todos": [{"title": "Rechnung an Kunde X schicken", "minutes": 5}]}
+          {"todos": [{"name": "Rechnung an Kunde X schicken", "parts": [
+            {"description": "Rechnung im Ordner suchen", "minutes": 2},
+            {"description": "Mail mit Anhang schreiben", "minutes": 3},
+            {"description": "Abschicken und ablegen", "minutes": 1}]}]}
         """
 
-    private static let schema: [String: Any] = [
+    // Keys are sent sorted (see OllamaClient), and constrained decoding writes them in that order, so they are
+    // named such that the model writes a step's description before its minutes and the name before the parts.
+    static let schema: [String: Any] = [
         "type": "object",
         "properties": [
             "todos": [
                 "type": "array",
                 "items": [
                     "type": "object",
-                    "properties": ["title": ["type": "string"], "minutes": ["type": "integer"]],
-                    "required": ["title", "minutes"],
+                    "properties": [
+                        "name": ["type": "string"],
+                        "parts": [
+                            "type": "array",
+                            "items": [
+                                "type": "object",
+                                "properties": [
+                                    "description": ["type": "string"],
+                                    "minutes": ["type": "integer", "minimum": 1, "maximum": 240],
+                                ],
+                                "required": ["description", "minutes"],
+                            ],
+                        ],
+                    ],
+                    "required": ["name", "parts"],
                 ],
             ],
         ],
@@ -91,13 +111,16 @@ enum TodoRefiner {
     }
 
     /// Names the note's language explicitly: small models otherwise answer in the language of the instructions.
-    private static func prompt(for note: String) -> String {
+    static func prompt(for note: String) -> String {
+        // Short notes often mix in English terms ("PR reviewen"), so only a clear English note counts as English.
         let recognizer = NLLanguageRecognizer()
-        recognizer.languageConstraints = [.german, .english, .french, .spanish, .italian, .dutch]
+        recognizer.languageConstraints = [.german, .english]
         recognizer.processString(note)
-        let language = recognizer.dominantLanguage
-            .flatMap { Locale(identifier: "de").localizedString(forLanguageCode: $0.rawValue) } ?? "Deutsch"
-        return "Sprache der Todos: \(language)\nNotiz: \(note)"
+        let english = (recognizer.languageHypotheses(withMaximum: 2)[.english] ?? 0) > 0.75
+        // Small models follow the language of the request more than an instruction naming it.
+        return english
+            ? "Write the todo names and parts in natural English, not German, starting with the verb (e.g. \"Call Anna about the meeting\").\nNote: \(note)"
+            : "Schreibe die Todos auf Deutsch.\nNotiz: \(note)"
     }
 
     /// Clamps the model's estimates. A duration the user typed themselves beats the model's guess.
@@ -107,10 +130,25 @@ enum TodoRefiner {
         return todos.map { RefinedTodo(title: $0.title, minutes: clamp($0.minutes)) }
     }
 
+    /// The model's answer. The estimate is the sum of the steps, which comes out more precise than
+    /// asking for a single number (small models pick round or example values for that).
+    private struct Answer: Decodable {
+        struct Item: Decodable {
+            struct Part: Decodable { let minutes: Int }
+            let name: String
+            let parts: [Part]
+        }
+        let todos: [Item]
+    }
+
     static func parse(_ text: String) -> [RefinedTodo]? {
-        guard let start = text.firstIndex(of: "["), let end = text.lastIndex(of: "]"), start < end else { return nil }
-        let todos = try? JSONDecoder().decode([RefinedTodo].self, from: Data(text[start...end].utf8))
-        return todos?.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"), start < end,
+              let answer = try? JSONDecoder().decode(Answer.self, from: Data(text[start...end].utf8)) else { return nil }
+        return answer.todos.compactMap { item in
+            let title = item.name.trimmingCharacters(in: .whitespaces)
+            let minutes = item.parts.reduce(0) { $0 + min(max($1.minutes, 0), 240) }
+            return title.isEmpty || minutes == 0 ? nil : RefinedTodo(title: title, minutes: minutes)
+        }
     }
 
     // MARK: - Fallback
