@@ -27,20 +27,20 @@ struct TimerControls: View {
                         if parseDuration(durationText) != minutes { durationText = formatMinutes(minutes) }
                     }
                 Button { start(source: "button") } label: {
-                    Label("Fokus starten", systemImage: "play.fill").frame(maxWidth: .infinity)
+                    Label(L10n.text("startFocus"), systemImage: "play.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
             } else {
                 Button { state.togglePause() } label: {
-                    Label(state.isPaused ? "Weiter" : "Pause", systemImage: state.isPaused ? "play.fill" : "pause.fill")
+                    Label(state.isPaused ? L10n.text("resume") : L10n.text("pause"), systemImage: state.isPaused ? "play.fill" : "pause.fill")
                 }
                 Button { state.skipPhase() } label: {
-                    Label("Überspringen", systemImage: "forward.end.fill")
+                    Label(L10n.text("skip"), systemImage: "forward.end.fill")
                 }
                 Spacer()
                 Button(role: .destructive) { state.stop() } label: {
-                    Label("Stopp", systemImage: "stop.fill")
+                    Label(L10n.text("stop"), systemImage: "stop.fill")
                 }
             }
         }
@@ -125,7 +125,7 @@ struct EstimateControl: View {
                     Button(formatMinutes(minutes)) { state.todos.setEstimate(todo.id, minutes: minutes, method: "menu") }
                 }
                 Divider()
-                Button("Eigene Dauer eingeben…") { editing = true }
+                Button(L10n.text("customDuration")) { editing = true }
             } label: {
                 EstimateBadge(minutes: todo.estimatedMinutes ?? 0)
             }

@@ -65,6 +65,9 @@ enum AnalyticsEventName: String, Codable {
     case timerPaused = "timer_paused"
     case timerResumed = "timer_resumed"
     case focusDurationInvalid = "focus_duration_invalid"
+    case timerEntryOpened = "timer_entry_opened"
+    case timerEntryCancelled = "timer_entry_cancelled"
+    case focusTaskSelected = "focus_task_selected"
     case appBlocked = "app_blocked"
     case breakPanelClosed = "break_panel_closed"
     // Todos
@@ -81,6 +84,14 @@ enum AnalyticsEventName: String, Codable {
     case todoListFilterChanged = "todo_list_filter_changed"
     case suggestionShown = "suggestion_shown"
     case suggestionSkipped = "suggestion_skipped"
+    case taskAdded = "task_added"
+    case todoProjectChanged = "todo_project_changed"
+    case todoBlockedAppsChanged = "todo_blocked_apps_changed"
+    // Projects
+    case projectCreated = "project_created"
+    case projectRenamed = "project_renamed"
+    case projectBlockedAppsChanged = "project_blocked_apps_changed"
+    case projectDeleted = "project_deleted"
     // Settings & blocking
     case settingChanged = "setting_changed"
     case blockedAppAdded = "blocked_app_added"
@@ -200,12 +211,23 @@ struct AnalyticsSettings: Codable {
 /// `AnalyticsSink` (dropping `content`, and asking the user first) and add it in `Analytics.sinks`.
 @MainActor
 enum Analytics {
-    static var settings = Storage.load(AnalyticsSettings.self, from: "analytics.json") ?? AnalyticsSettings() {
+    static var settings: AnalyticsSettings = {
+        if let saved = Storage.load(AnalyticsSettings.self, from: "analytics.json") { return saved }
+        // Save right away so the install ID stays the same across launches.
+        let fresh = AnalyticsSettings()
+        Storage.save(fresh, to: "analytics.json")
+        return fresh
+    }() {
         didSet { Storage.save(settings, to: "analytics.json") }
     }
     static var sinks: [AnalyticsSink] = [LocalFileSink()]
     static let sessionID = UUID()
-    static let launchedAt = Date()
+    /// Set by `start()`; static properties are created lazily on first use.
+    private(set) static var launchedAt = Date()
+
+    static func start() {
+        launchedAt = Date()
+    }
     static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 
     static func track(_ name: AnalyticsEventName, _ properties: AnalyticsProperties = [:], content: [String: String]? = nil) {

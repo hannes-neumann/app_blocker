@@ -7,12 +7,14 @@ final class AppState {
     var settings: FocusSettings = Storage.load(FocusSettings.self, from: "settings.json") ?? FocusSettings() {
         didSet {
             Storage.save(settings, to: "settings.json")
+            L10n.language = settings.language
             trackSettingsChange(from: oldValue)
             syncDomains()
             if phase == .focus && settings != oldValue { applyBlocking(true) }
         }
     }
     let todos = TodoStore()
+    let projects = ProjectStore()
     let stats = StatsStore()
     let ai = AIEngine()
 
@@ -28,8 +30,31 @@ final class AppState {
     var dashboardSection: DashboardSection = .focus {
         didSet { if dashboardSection != oldValue { Analytics.track(.dashboardSectionViewed, ["section": .string(dashboardSection.rawValue)]) } }
     }
+    var selectedTaskID: UUID? {
+        didSet {
+            guard selectedTaskID != oldValue else { return }
+            Analytics.track(.focusTaskSelected, ["todo_id": .string(selectedTaskID?.uuidString ?? ""),
+                                                 "has_project": .bool(selectedTask?.projectID != nil)])
+        }
+    }
+
+    var selectedTask: Todo? {
+        guard let selectedTaskID else { return nil }
+        return todos.todos.first { $0.id == selectedTaskID }
+    }
+
+    var selectedProject: Project? {
+        projects.project(selectedTask?.projectID)
+    }
+
+    var activeBlockedApps: [BlockedApp] {
+        if let taskApps = selectedTask?.blockedApps { return taskApps }
+        if let projectApps = selectedProject?.blockedApps { return projectApps }
+        return settings.blockedApps
+    }
 
     static let shortcutDescription = "⌃⌥N"
+    static let timerShortcutDescription = "⌃⌥T"
 
     @ObservationIgnored private var endDate: Date?
     @ObservationIgnored private var focusStartedAt: Date?
@@ -41,6 +66,7 @@ final class AppState {
     @ObservationIgnored private let appBlocker = AppBlocker()
     @ObservationIgnored private let domainBlocker = DomainBlocker()
     @ObservationIgnored private var hotKey: HotKey?
+    @ObservationIgnored private var timerHotKey: HotKey?
     @ObservationIgnored private(set) var panels: PanelController!
 
     var remainingText: String {
@@ -58,9 +84,11 @@ final class AppState {
     }
 
     func setup() {
+        L10n.language = settings.language
         panels = PanelController(state: self)
         ai.refreshStatus()
         todos.refiner = { [ai] note in await ai.refine(note) }
+        Analytics.start()
         Analytics.track(.appLaunched, [
             "os_version": .string(ProcessInfo.processInfo.operatingSystemVersionString),
             "open_todos": .int(todos.open.count),
@@ -80,6 +108,9 @@ final class AppState {
         hotKey = HotKey(keyCode: kVK_ANSI_N, modifiers: controlKey | optionKey) { [weak self] in
             self?.showQuickCapture(source: "hotkey")
         }
+        timerHotKey = HotKey(keyCode: kVK_ANSI_T, modifiers: controlKey | optionKey) { [weak self] in
+            self?.showTimerEntry()
+        }
         todos.resumePendingRefinements()
     }
 
@@ -96,6 +127,11 @@ final class AppState {
     // MARK: - Timer
 
     func startFocus(source: String = "button") { begin(.focus, source: source) }
+
+    func startFocus(minutes: Int) {
+        guard phase == .idle, minutes > 0 else { return }
+        begin(.focus, durationMinutes: minutes, source: "timer_entry")
+    }
 
     func togglePause() {
         guard phase != .idle else { return }
@@ -125,9 +161,10 @@ final class AppState {
         applyBlocking(false)
     }
 
-    private func begin(_ newPhase: Phase, source: String) {
+    private func begin(_ newPhase: Phase, durationMinutes: Int? = nil, source: String) {
         phase = newPhase
-        phaseDuration = TimeInterval(max(minutes(for: newPhase), 1) * 60)
+        let duration = durationMinutes ?? minutes(for: newPhase)
+        phaseDuration = TimeInterval(max(duration, 1) * 60)
         remaining = phaseDuration
         endDate = Date().addingTimeInterval(phaseDuration)
         isPaused = false
@@ -196,7 +233,8 @@ final class AppState {
         if !isPaused { remaining = max(0, (endDate ?? Date()).timeIntervalSinceNow) }
         // Paused time is excluded because `remaining` does not move while paused.
         stats.recordFocus(start: start, focusedSeconds: phaseDuration - remaining,
-                          plannedSeconds: phaseDuration, completed: completed)
+                          plannedSeconds: phaseDuration, completed: completed,
+                          task: selectedTask, project: selectedProject)
         focusStartedAt = nil
     }
 
@@ -229,7 +267,8 @@ final class AppState {
     private func applyBlocking(_ on: Bool) {
         if on {
             let ownID = Bundle.main.bundleIdentifier
-            appBlocker.start(bundleIDs: Set(settings.blockedApps.map(\.bundleID).filter { $0 != ownID }))
+            let apps = activeBlockedApps
+            appBlocker.start(bundleIDs: Set(apps.map(\.bundleID).filter { $0 != ownID }))
         } else {
             appBlocker.stop()
         }
@@ -287,6 +326,11 @@ final class AppState {
     func showQuickCapture(source: String) {
         Analytics.track(.quickCaptureOpened, ["source": .string(source)])
         panels.showCapture { [weak self] text in self?.todos.capture(text, source: "quick_capture") }
+    }
+
+    func showTimerEntry() {
+        guard phase == .idle else { return }
+        panels.showTimerEntry()
     }
 
     func refreshSuggestion() {

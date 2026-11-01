@@ -9,6 +9,10 @@ struct FocusRecord: Codable, Identifiable {
     var plannedSeconds: Double
     /// Ran until the timer hit zero (not skipped or stopped).
     var completed: Bool
+    var taskID: UUID?
+    var taskTitle: String?
+    var projectID: UUID?
+    var projectName: String?
 }
 
 /// Kept apart from the todo list so clearing done todos does not erase history.
@@ -28,6 +32,15 @@ struct DayStat: Identifiable {
     var id: Date { day }
 }
 
+struct TaskStat: Identifiable {
+    var id: String { taskID?.uuidString ?? taskTitle }
+    var taskID: UUID?
+    var taskTitle: String
+    var projectName: String?
+    var focusMinutes: Double
+    var sessions: Int
+}
+
 @MainActor @Observable
 final class StatsStore {
     private(set) var focusRecords: [FocusRecord] = Storage.load([FocusRecord].self, from: "focus-sessions.json") ?? []
@@ -35,12 +48,31 @@ final class StatsStore {
 
     private var calendar: Calendar { .current }
 
-    func recordFocus(start: Date, focusedSeconds: Double, plannedSeconds: Double, completed: Bool) {
+    func recordFocus(start: Date, focusedSeconds: Double, plannedSeconds: Double, completed: Bool,
+                     task: Todo?, project: Project?) {
         // Ignore accidental starts.
         guard focusedSeconds >= 60 else { return }
         focusRecords.append(FocusRecord(start: start, end: Date(), focusedSeconds: focusedSeconds,
-                                        plannedSeconds: plannedSeconds, completed: completed))
+                                        plannedSeconds: plannedSeconds, completed: completed,
+                                        taskID: task?.id, taskTitle: task?.title,
+                                        projectID: project?.id, projectName: project?.name))
         Storage.save(focusRecords, to: "focus-sessions.json")
+    }
+
+    func taskStats(lastDays count: Int) -> [TaskStat] {
+        let since = calendar.date(byAdding: .day, value: -(count - 1), to: calendar.startOfDay(for: Date()))!
+        var stats: [String: TaskStat] = [:]
+        for record in focusRecords where record.start >= since {
+            guard let title = record.taskTitle else { continue }
+            let key = record.taskID?.uuidString ?? title
+            if stats[key] == nil {
+                stats[key] = TaskStat(taskID: record.taskID, taskTitle: title,
+                                      projectName: record.projectName, focusMinutes: 0, sessions: 0)
+            }
+            stats[key]!.focusMinutes += record.focusedSeconds / 60
+            stats[key]!.sessions += 1
+        }
+        return stats.values.sorted { $0.focusMinutes > $1.focusMinutes }
     }
 
     func todoChanged(_ todo: Todo) {

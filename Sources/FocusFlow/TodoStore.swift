@@ -24,6 +24,28 @@ final class TodoStore {
         refine(placeholder)
     }
 
+    func addTask(title: String, projectID: UUID) {
+        let text = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        let todo = Todo(title: text, sourceNote: text, projectID: projectID)
+        todos.insert(todo, at: 0)
+        save()
+        Analytics.track(.taskAdded, ["todo_id": .string(todo.id.uuidString), "project_id": .string(projectID.uuidString)],
+                        content: ["title": text])
+    }
+
+    func setProject(_ todoID: UUID, projectID: UUID?) {
+        mutate(todoID) { $0.projectID = projectID }
+        Analytics.track(.todoProjectChanged, ["todo_id": .string(todoID.uuidString),
+                                              "project_id": .string(projectID?.uuidString ?? "")])
+    }
+
+    func setBlockedApps(_ apps: [BlockedApp]?, for todoID: UUID) {
+        mutate(todoID) { $0.blockedApps = apps }
+        Analytics.track(.todoBlockedAppsChanged, ["todo_id": .string(todoID.uuidString), "custom": .bool(apps != nil),
+                                                  "bundle_ids": .string(apps?.map(\.bundleID).joined(separator: ",") ?? "")])
+    }
+
     /// Notes that were still being refined when the app quit.
     func resumePendingRefinements() {
         todos.filter(\.isRefining).forEach(refine)

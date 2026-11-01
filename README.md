@@ -10,10 +10,12 @@ passenden Pause vorgeschlagen werden.
 - **App-Blocker**: Ausgewählte Apps werden während der Fokuszeit beendet und beim erneuten Öffnen sofort wieder geschlossen.
 - **Webseiten-Blocker**: Domains werden systemweit über `/etc/hosts` gesperrt (gilt für alle Browser).
 - **Schnellnotiz** mit `⌃⌥N`: ein schwebendes Textfeld, egal in welcher App du gerade bist. Mit Enter speichern, mit Esc schließen.
+- **Timer-Shortcut** mit `⌃⌥T`: öffnet ein Eingabefenster für eine eigene Fokusdauer. Mit Enter oder einer Vorauswahl startet der Timer direkt.
 - **KI-Aufbereitung**: Ein Sprachmodell auf deinem Mac (Apple Foundation Model oder ein Ollama-Modell) macht aus der Notiz ein oder mehrere konkrete Todos mit geschätzter Dauer.
 - **Pausenvorschlag**: Zu Beginn jeder Pause schlägt FocusFlow das längste offene Todo vor, das noch in die Pause passt.
 - **Dashboard**: ein eigenes Fenster mit Timer, allen Todos (Titel bearbeiten, Dauer anpassen, erledigen, löschen), Statistik und Einstellungen. Öffnest du es über „Dashboard“ im Menü.
-- **Statistik**: Fokuszeit pro Tag mit Tagesziel, Serie, durchgezogene Sessions, erledigte Todos und Fokuszeit nach Tageszeit, für 7 oder 30 Tage. Im Menü steht eine Kurzübersicht für heute.
+- **Projekte und Aufgaben**: Projekte mit konkreten Aufgaben anlegen, pro Projekt oder Aufgabe eigene App-Sperrlisten hinterlegen und vor dem Fokus die Aufgabe auswählen. Regeln der Aufgabe überschreiben Projektregeln, ansonsten wird die globale Regel verwendet.
+- **Statistik**: Fokuszeit pro Tag mit Tagesziel, Serie, durchgezogene Sessions, erledigte Todos, Fokuszeit nach Tageszeit und Fokuszeit pro Aufgabe, für 7 oder 30 Tage. Im Menü steht eine Kurzübersicht für heute.
 
 ## Bauen und starten
 
@@ -66,7 +68,7 @@ Eine Angabe wie „30 min“ oder „2h“ in der Notiz wird immer als Dauer üb
 sich per Klick auf das Zeit-Badge ändern, entweder über eine Vorauswahl oder mit „Eigene Dauer eingeben…“
 als Text („25“, „45 min“, „1h“, „1,5h“, „1:30“).
 
-Daten (Einstellungen, Todos) liegen in `~/Library/Application Support/FocusFlow/`.
+Daten (Einstellungen, Projekte, Todos und Fokus-Sessions) liegen in `~/Library/Application Support/FocusFlow/`.
 
 **Protokoll:** Jede Bedienung wird als eine JSON-Zeile in `Logs/events-JJJJ-MM-TT.jsonl` im selben Ordner
 gespeichert (abschaltbar und löschbar unter Einstellungen → Allgemein, Dateien älter als 180 Tage werden
@@ -85,5 +87,5 @@ Erlaubnis und hängt den Sink an `Analytics.sinks` an.
 ## Bekannte Grenzen
 
 - Bereits geöffnete Tabs gesperrter Seiten können bis zum Neuladen weiterlaufen, weil Browser bestehende Verbindungen und DNS-Antworten kurz zwischenspeichern.
-- Das Tastenkürzel ist im Moment fest auf `⌃⌥N` eingestellt.
+- Die Tastenkürzel sind im Moment fest auf `⌃⌥N` (Schnellnotiz) und `⌃⌥T` (Timer) eingestellt.
 - Apps mit ungesicherten Dokumenten fragen beim Beenden nach. Lehnst du ab, wird die App nur ausgeblendet.

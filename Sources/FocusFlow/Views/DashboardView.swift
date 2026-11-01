@@ -1,21 +1,23 @@
 import SwiftUI
 
 enum DashboardSection: String, CaseIterable, Identifiable {
-    case focus, todos, stats, settings
+    case focus, projects, todos, stats, settings
     var id: Self { self }
 
     var title: String {
         switch self {
-        case .focus: "Fokus"
-        case .todos: "Todos"
-        case .stats: "Statistik"
-        case .settings: "Einstellungen"
+        case .focus: L10n.text("focusSection")
+        case .projects: L10n.text("projects")
+        case .todos: L10n.text("todos")
+        case .stats: L10n.text("stats")
+        case .settings: L10n.text("settings")
         }
     }
 
     var symbol: String {
         switch self {
         case .focus: "timer"
+        case .projects: "folder"
         case .todos: "checklist"
         case .stats: "chart.bar.xaxis"
         case .settings: "gearshape"
@@ -38,6 +40,7 @@ struct DashboardView: View {
         } detail: {
             switch state.dashboardSection {
             case .focus: FocusPage()
+            case .projects: ProjectsView()
             case .todos: TodosPage()
             case .stats: StatsView()
             case .settings: SettingsView()
@@ -84,6 +87,7 @@ private struct FocusPage: View {
                 .frame(maxWidth: .infinity)
             ProgressView(value: state.progress)
                 .tint(state.phase.isBreak ? .green : .accentColor)
+            TaskPicker()
             TimerControls(large: true)
             Text(blockingSummary).font(.caption).foregroundStyle(.secondary)
         }
@@ -93,9 +97,31 @@ private struct FocusPage: View {
     }
 
     private var blockingSummary: String {
-        let apps = state.settings.blockedApps.count
+        let apps = state.activeBlockedApps.count
         let domains = state.settings.blockDomains ? state.settings.blockedDomains.count : 0
         return "Im Fokus blockiert: \(apps) \(apps == 1 ? "App" : "Apps") · \(domains) \(domains == 1 ? "Webseite" : "Webseiten")"
+    }
+
+    private struct TaskPicker: View {
+        @Environment(AppState.self) private var state
+
+        var body: some View {
+            Picker("Fokusaufgabe", selection: Binding(
+                get: { state.selectedTaskID },
+                set: { state.selectedTaskID = $0 }
+            )) {
+                Text(L10n.text("noProjectTask")).tag(UUID?.none)
+                ForEach(state.projects.projects) { project in
+                    Section(project.name) {
+                        ForEach(state.todos.open.filter { $0.projectID == project.id }) { task in
+                            Text(task.title).tag(UUID?.some(task.id))
+                        }
+                    }
+                }
+            }
+            .labelsHidden()
+            .disabled(state.phase != .idle)
+        }
     }
 
     private var todayCard: some View {
@@ -103,7 +129,7 @@ private struct FocusPage: View {
         let goal = state.settings.dailyGoalMinutes
         let streak = state.stats.streak
         return VStack(alignment: .leading, spacing: 10) {
-            Text("Heute").font(.headline)
+            Text(L10n.text("today")).font(.headline)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text("\(today)").font(.system(size: 32, weight: .semibold, design: .rounded)).monospacedDigit()
                 Text("/ \(goal) Min").foregroundStyle(.secondary)
@@ -111,7 +137,7 @@ private struct FocusPage: View {
             ProgressView(value: Double(min(today, goal)), total: Double(max(goal, 1)))
             Text(streak > 0 ? "Serie: \(streak) \(streak == 1 ? "Tag" : "Tage") in Folge" : "Starte heute deine Serie")
                 .font(.caption).foregroundStyle(.secondary)
-            Button("Statistik ansehen") { state.dashboardSection = .stats }
+            Button(L10n.text("statistics")) { state.dashboardSection = .stats }
                 .buttonStyle(.link)
                 .font(.caption)
         }
@@ -122,13 +148,13 @@ private struct FocusPage: View {
 
     private var suggestionCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Vorschlag für die Pause").font(.headline)
+            Text(L10n.text("breakSuggestion")).font(.headline)
             if let todo = state.suggestion {
                 Text(todo.title).fixedSize(horizontal: false, vertical: true)
                 if let minutes = todo.estimatedMinutes { EstimateBadge(minutes: minutes) }
                 HStack {
-                    Button("Erledigt") { state.completeSuggestion() }
-                    Button("Anderer") { state.nextSuggestion() }
+                    Button(L10n.text("done")) { state.completeSuggestion() }
+                    Button(L10n.text("nextSuggestion")) { state.nextSuggestion() }
                 }
             } else {
                 Text("Nichts passt rein, einfach durchatmen.").foregroundStyle(.secondary)
@@ -143,7 +169,7 @@ private struct FocusPage: View {
         let open = state.todos.open
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Als Nächstes").font(.headline)
+                Text(L10n.text("upNext")).font(.headline)
                 Spacer()
                 if open.count > 5 {
                     Button("Alle \(open.count) Todos") { state.dashboardSection = .todos }.buttonStyle(.link)
@@ -151,7 +177,7 @@ private struct FocusPage: View {
             }
             NoteField()
             if open.isEmpty {
-                Text("Keine offenen Todos.").foregroundStyle(.secondary)
+                Text(L10n.text("noOpenTasks")).foregroundStyle(.secondary)
             } else {
                 VStack(spacing: 0) {
                     ForEach(open.prefix(5)) { todo in
@@ -178,8 +204,8 @@ private struct TodosPage: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Picker("Anzeigen", selection: $showDone) {
-                    Text("Offen (\(state.todos.open.count))").tag(false)
-                    Text("Erledigt (\(state.todos.done.count))").tag(true)
+                    Text(L10n.text("openTasks", state.todos.open.count)).tag(false)
+                    Text(L10n.text("completedTasks", state.todos.done.count)).tag(true)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -187,10 +213,10 @@ private struct TodosPage: View {
                 .onChange(of: showDone) { Analytics.track(.todoListFilterChanged, ["filter": showDone ? "done" : "open"]) }
                 Spacer()
                 if showDone {
-                    Button("Erledigte löschen") { state.todos.clearDone(source: "dashboard") }
+                    Button(L10n.text("clearCompleted")) { state.todos.clearDone(source: "dashboard") }
                         .disabled(todos.isEmpty)
                 } else {
-                    Text("Zusammen etwa \(formatMinutes(total))").foregroundStyle(.secondary)
+                    Text(L10n.text("aboutTotal", formatMinutes(total))).foregroundStyle(.secondary)
                 }
             }
             if !showDone { NoteField() }

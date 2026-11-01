@@ -6,12 +6,12 @@ import SwiftUI
 final class FloatingPanel: NSPanel {
     var onCancel: (() -> Void)?
 
-    init(closesOnResignKey: Bool) {
+    init(closesOnResignKey: Bool, movable: Bool = false) {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         isFloatingPanel = true
         level = .floating
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        isMovableByWindowBackground = true
+        isMovableByWindowBackground = movable
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         backgroundColor = .clear
@@ -55,7 +55,8 @@ final class FloatingPanel: NSPanel {
 @MainActor
 final class PanelController {
     private unowned let state: AppState
-    private let capturePanel = FloatingPanel(closesOnResignKey: true)
+    private let capturePanel = FloatingPanel(closesOnResignKey: true, movable: true)
+    private let timerPanel = FloatingPanel(closesOnResignKey: true)
     private let breakPanel = FloatingPanel(closesOnResignKey: false)
     private let hudPanel = FloatingPanel(closesOnResignKey: false)
     private var dashboardWindow: NSWindow?
@@ -72,6 +73,7 @@ final class PanelController {
             Analytics.track(.quickCaptureCancelled, ["via": "hotkey"])
             return
         }
+
         let close = { [capturePanel] in capturePanel.orderOut(nil) }
         capturePanel.setContent(QuickCaptureView(
             onSubmit: { text in onSubmit(text); close() },
@@ -79,6 +81,26 @@ final class PanelController {
         ))
         capturePanel.position(verticalFraction: 0.3)
         capturePanel.makeKeyAndOrderFront(nil)
+    }
+
+    func showTimerEntry() {
+        if timerPanel.isVisible {
+            timerPanel.orderOut(nil)
+            Analytics.track(.timerEntryCancelled, ["via": "hotkey"])
+            return
+        }
+        Analytics.track(.timerEntryOpened)
+        let close = { [timerPanel] in timerPanel.orderOut(nil) }
+        timerPanel.setContent(TimerEntryView(
+            defaultMinutes: state.settings.focusMinutes,
+            onStart: { [self] minutes in
+                close()
+                state.startFocus(minutes: minutes)
+            },
+            onCancel: { Analytics.track(.timerEntryCancelled, ["via": "escape"]); close() }
+        ))
+        timerPanel.position(verticalFraction: 0.3)
+        timerPanel.makeKeyAndOrderFront(nil)
     }
 
     func showBreak() {
@@ -124,6 +146,8 @@ final class PanelController {
         hosting.sizingOptions = [.minSize]
         let window = NSWindow(contentViewController: hosting)
         window.title = "FocusFlow"
+        window.representedURL = Bundle.main.bundleURL
+        window.standardWindowButton(.documentIconButton)?.image = NSApp.applicationIconImage
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
         window.isReleasedWhenClosed = false
         window.setContentSize(NSSize(width: 1000, height: 720))

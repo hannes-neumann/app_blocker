@@ -77,13 +77,13 @@ struct MenuContentView: View {
                     .scaleEffect(0.45)
                     .frame(width: 24, height: 24)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Heute \(today) von \(goal) Min").font(.callout.weight(.medium))
+                    Text(L10n.text("todaySummary", today, goal)).font(.callout.weight(.medium))
                     Text(streak > 0 ? "Serie: \(streak) \(streak == 1 ? "Tag" : "Tage") in Folge" : "Starte heute deine Serie")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text("Statistik").font(.caption)
+                Text(L10n.text("statistics")).font(.caption)
                 Image(systemName: "chevron.right").font(.caption)
             }
             .foregroundStyle(.primary)
@@ -96,7 +96,7 @@ struct MenuContentView: View {
 
     private var suggestionSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Vorschlag für die Pause").font(.caption).foregroundStyle(.secondary)
+            Text(L10n.text("breakSuggestion")).font(.caption).foregroundStyle(.secondary)
             if let todo = state.suggestion {
                 HStack {
                     Text(todo.title).fontWeight(.medium)
@@ -104,8 +104,8 @@ struct MenuContentView: View {
                     if let minutes = todo.estimatedMinutes { EstimateBadge(minutes: minutes) }
                 }
                 HStack {
-                    Button("Erledigt") { state.completeSuggestion() }
-                    Button("Anderer") { state.nextSuggestion() }
+                    Button(L10n.text("done")) { state.completeSuggestion() }
+                    Button(L10n.text("nextSuggestion")) { state.nextSuggestion() }
                 }
                 .controlSize(.small)
             } else {
@@ -138,7 +138,7 @@ struct MenuContentView: View {
 
             let open = state.todos.open
             if open.isEmpty {
-                Text("Keine offenen Todos.")
+                Text(L10n.text("noOpenTasks"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
@@ -157,7 +157,7 @@ struct MenuContentView: View {
                     VStack(spacing: 2) {
                         ForEach(done.prefix(10)) { TodoRow(todo: $0) }
                     }
-                    Button("Erledigte löschen") { state.todos.clearDone(source: "menu") }
+                    Button(L10n.text("clearCompleted")) { state.todos.clearDone(source: "menu") }
                         .controlSize(.small)
                 }
                 .font(.callout)
@@ -167,16 +167,16 @@ struct MenuContentView: View {
 
     private var footer: some View {
         HStack {
-            Button("Dashboard") {
+            Button(L10n.text("dashboard")) {
                 dismiss()
                 state.panels.showDashboard(.focus, source: "menu")
             }
-            Button("Einstellungen…") {
+            Button(L10n.text("settings") + "…") {
                 dismiss()
                 state.panels.showDashboard(.settings, source: "menu")
             }
             Spacer()
-            Button("Beenden") { NSApp.terminate(nil) }
+            Button(L10n.text("quit")) { NSApp.terminate(nil) }
         }
         .buttonStyle(.borderless)
     }

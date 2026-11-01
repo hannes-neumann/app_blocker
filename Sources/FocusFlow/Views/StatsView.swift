@@ -12,11 +12,11 @@ struct StatsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
-                    Text("Dein Fortschritt").font(.title2.weight(.semibold))
+                    Text(L10n.text("progress")).font(.title2.weight(.semibold))
                     Spacer()
                     Picker("Zeitraum", selection: $range) {
-                        Text("7 Tage").tag(7)
-                        Text("30 Tage").tag(30)
+                        Text(L10n.text("sevenDays")).tag(7)
+                        Text(L10n.text("thirtyDays")).tag(30)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
@@ -35,9 +35,12 @@ struct StatsView: View {
                 ChartCard(title: "Wann du dich fokussierst", subtitle: "Minuten nach Tageszeit, letzte \(range) Tage") {
                     FocusByHourChart(hours: state.stats.minutesByHour(lastDays: range))
                 }
+                TaskStatsCard(stats: state.stats.taskStats(lastDays: range))
             }
+
             .padding(24)
         }
+
         .frame(minWidth: 640, minHeight: 560)
     }
 
@@ -59,6 +62,37 @@ struct StatsView: View {
                      detail: "ganz durchgezogen", progress: sessions == 0 ? nil : Double(completed) / Double(sessions))
             StatTile(title: "Todos erledigt", value: "\(todos)", unit: "",
                      detail: "in den letzten \(range) Tagen")
+        }
+    }
+
+    private struct TaskStatsCard: View {
+        let stats: [TaskStat]
+
+        var body: some View {
+            ChartCard(title: L10n.text("focusTimeByTask"), subtitle: L10n.text("taskSessionsRange")) {
+                if stats.isEmpty {
+                    ContentUnavailableView(L10n.text("noTaskSessions"), systemImage: "checklist",
+                                           description: Text(L10n.text("chooseTaskHint")))
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(stats.prefix(8)) { stat in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(stat.taskTitle).lineLimit(1)
+                                    if let project = stat.projectName {
+                                        Text(project).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                Text("\(Int(stat.focusMinutes)) Min")
+                                    .font(.callout.weight(.medium))
+                                    .monospacedDigit()
+                            }
+                            if stat.id != stats.prefix(8).last?.id { Divider() }
+                        }
+                    }
+                }
+            }
         }
     }
 }
