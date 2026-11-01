@@ -56,6 +56,7 @@ final class FloatingPanel: NSPanel {
 final class PanelController {
     private unowned let state: AppState
     private let capturePanel = FloatingPanel(closesOnResignKey: true, movable: true)
+    private let timerPanel = FloatingPanel(closesOnResignKey: true)
     private let breakPanel = FloatingPanel(closesOnResignKey: false)
     private let hudPanel = FloatingPanel(closesOnResignKey: false)
     private var dashboardWindow: NSWindow?
@@ -71,6 +72,7 @@ final class PanelController {
             capturePanel.orderOut(nil)
             return
         }
+
         let close = { [capturePanel] in capturePanel.orderOut(nil) }
         capturePanel.setContent(QuickCaptureView(
             onSubmit: { text in onSubmit(text); close() },
@@ -78,6 +80,24 @@ final class PanelController {
         ))
         capturePanel.position(verticalFraction: 0.3)
         capturePanel.makeKeyAndOrderFront(nil)
+    }
+
+    func showTimerEntry() {
+        if timerPanel.isVisible {
+            timerPanel.orderOut(nil)
+            return
+        }
+        let close = { [timerPanel] in timerPanel.orderOut(nil) }
+        timerPanel.setContent(TimerEntryView(
+            defaultMinutes: state.settings.focusMinutes,
+            onStart: { [self] minutes in
+                close()
+                state.startFocus(minutes: minutes)
+            },
+            onCancel: close
+        ))
+        timerPanel.position(verticalFraction: 0.3)
+        timerPanel.makeKeyAndOrderFront(nil)
     }
 
     func showBreak() {

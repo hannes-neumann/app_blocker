@@ -10,6 +10,7 @@ passenden Pause vorgeschlagen werden.
 - **App-Blocker**: Ausgewählte Apps werden während der Fokuszeit beendet und beim erneuten Öffnen sofort wieder geschlossen.
 - **Webseiten-Blocker**: Domains werden systemweit über `/etc/hosts` gesperrt (gilt für alle Browser).
 - **Schnellnotiz** mit `⌃⌥N`: ein schwebendes Textfeld, egal in welcher App du gerade bist. Mit Enter speichern, mit Esc schließen.
+- **Timer-Shortcut** mit `⌃⌥T`: öffnet ein Eingabefenster für eine eigene Fokusdauer. Mit Enter oder einer Vorauswahl startet der Timer direkt.
 - **KI-Aufbereitung**: Das Apple Foundation Model (on-device) macht aus der Notiz ein oder mehrere konkrete Todos mit geschätzter Dauer.
 - **Pausenvorschlag**: Zu Beginn jeder Pause schlägt FocusFlow das längste offene Todo vor, das noch in die Pause passt.
 - **Dashboard**: ein eigenes Fenster mit Timer, allen Todos (Titel bearbeiten, Dauer anpassen, erledigen, löschen), Statistik und Einstellungen. Öffnest du es über „Dashboard“ im Menü.
@@ -61,5 +62,5 @@ Daten (Einstellungen, Projekte, Todos und Fokus-Sessions) liegen in `~/Library/A
 ## Bekannte Grenzen
 
 - Bereits geöffnete Tabs gesperrter Seiten können bis zum Neuladen weiterlaufen, weil Browser bestehende Verbindungen und DNS-Antworten kurz zwischenspeichern.
-- Das Tastenkürzel ist im Moment fest auf `⌃⌥N` eingestellt.
+- Die Tastenkürzel sind im Moment fest auf `⌃⌥N` (Schnellnotiz) und `⌃⌥T` (Timer) eingestellt.
 - Apps mit ungesicherten Dokumenten fragen beim Beenden nach. Lehnst du ab, wird die App nur ausgeblendet.

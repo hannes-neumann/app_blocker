@@ -45,6 +45,7 @@ final class AppState {
     }
 
     static let shortcutDescription = "⌃⌥N"
+    static let timerShortcutDescription = "⌃⌥T"
 
     @ObservationIgnored private var endDate: Date?
     @ObservationIgnored private var focusStartedAt: Date?
@@ -54,6 +55,7 @@ final class AppState {
     @ObservationIgnored private let appBlocker = AppBlocker()
     @ObservationIgnored private let domainBlocker = DomainBlocker()
     @ObservationIgnored private var hotKey: HotKey?
+    @ObservationIgnored private var timerHotKey: HotKey?
     @ObservationIgnored private(set) var panels: PanelController!
 
     var remainingText: String {
@@ -82,6 +84,9 @@ final class AppState {
         hotKey = HotKey(keyCode: kVK_ANSI_N, modifiers: controlKey | optionKey) { [weak self] in
             self?.showQuickCapture()
         }
+        timerHotKey = HotKey(keyCode: kVK_ANSI_T, modifiers: controlKey | optionKey) { [weak self] in
+            self?.showTimerEntry()
+        }
         todos.resumePendingRefinements()
     }
 
@@ -94,6 +99,11 @@ final class AppState {
     // MARK: - Timer
 
     func startFocus() { begin(.focus) }
+
+    func startFocus(minutes: Int) {
+        guard phase == .idle, minutes > 0 else { return }
+        begin(.focus, durationMinutes: minutes)
+    }
 
     func togglePause() {
         guard phase != .idle else { return }
@@ -119,9 +129,10 @@ final class AppState {
         applyBlocking(false)
     }
 
-    private func begin(_ newPhase: Phase) {
+    private func begin(_ newPhase: Phase, durationMinutes: Int? = nil) {
         phase = newPhase
-        phaseDuration = TimeInterval(max(minutes(for: newPhase), 1) * 60)
+        let duration = durationMinutes ?? minutes(for: newPhase)
+        phaseDuration = TimeInterval(max(duration, 1) * 60)
         remaining = phaseDuration
         endDate = Date().addingTimeInterval(phaseDuration)
         isPaused = false
@@ -255,6 +266,11 @@ final class AppState {
 
     func showQuickCapture() {
         panels.showCapture { [weak self] text in self?.todos.capture(text) }
+    }
+
+    func showTimerEntry() {
+        guard phase == .idle else { return }
+        panels.showTimerEntry()
     }
 
     func refreshSuggestion() {
