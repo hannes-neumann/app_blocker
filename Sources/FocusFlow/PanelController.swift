@@ -6,12 +6,12 @@ import SwiftUI
 final class FloatingPanel: NSPanel {
     var onCancel: (() -> Void)?
 
-    init(closesOnResignKey: Bool) {
+    init(closesOnResignKey: Bool, movable: Bool = false) {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         isFloatingPanel = true
         level = .floating
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        isMovableByWindowBackground = true
+        isMovableByWindowBackground = movable
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         backgroundColor = .clear
@@ -55,7 +55,7 @@ final class FloatingPanel: NSPanel {
 @MainActor
 final class PanelController {
     private unowned let state: AppState
-    private let capturePanel = FloatingPanel(closesOnResignKey: true)
+    private let capturePanel = FloatingPanel(closesOnResignKey: true, movable: true)
     private let breakPanel = FloatingPanel(closesOnResignKey: false)
     private let hudPanel = FloatingPanel(closesOnResignKey: false)
     private var dashboardWindow: NSWindow?
@@ -115,6 +115,8 @@ final class PanelController {
         hosting.sizingOptions = [.minSize]
         let window = NSWindow(contentViewController: hosting)
         window.title = "FocusFlow"
+        window.representedURL = Bundle.main.bundleURL
+        window.standardWindowButton(.documentIconButton)?.image = NSApp.applicationIconImage
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView]
         window.isReleasedWhenClosed = false
         window.setContentSize(NSSize(width: 1000, height: 720))

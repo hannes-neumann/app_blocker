@@ -12,11 +12,11 @@ struct StatsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
-                    Text("Dein Fortschritt").font(.title2.weight(.semibold))
+                    Text(L10n.text("progress")).font(.title2.weight(.semibold))
                     Spacer()
                     Picker("Zeitraum", selection: $range) {
-                        Text("7 Tage").tag(7)
-                        Text("30 Tage").tag(30)
+                        Text(L10n.text("sevenDays")).tag(7)
+                        Text(L10n.text("thirtyDays")).tag(30)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
@@ -68,10 +68,10 @@ struct StatsView: View {
         let stats: [TaskStat]
 
         var body: some View {
-            ChartCard(title: "Fokuszeit pro Aufgabe", subtitle: "Letzte Sitzungen im gewählten Zeitraum") {
+            ChartCard(title: L10n.text("focusTimeByTask"), subtitle: L10n.text("taskSessionsRange")) {
                 if stats.isEmpty {
-                    ContentUnavailableView("Noch keine Aufgaben-Sessions", systemImage: "checklist",
-                                           description: Text("Wähle vor dem Start eines Fokus eine Aufgabe aus."))
+                    ContentUnavailableView(L10n.text("noTaskSessions"), systemImage: "checklist",
+                                           description: Text(L10n.text("chooseTaskHint")))
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(stats.prefix(8)) { stat in

@@ -7,6 +7,7 @@ final class AppState {
     var settings: FocusSettings = Storage.load(FocusSettings.self, from: "settings.json") ?? FocusSettings() {
         didSet {
             Storage.save(settings, to: "settings.json")
+            L10n.language = settings.language
             syncDomains()
             if phase == .focus && settings != oldValue { applyBlocking(true) }
         }
@@ -70,6 +71,7 @@ final class AppState {
     }
 
     func setup() {
+        L10n.language = settings.language
         panels = PanelController(state: self)
         aiStatus = TodoRefiner.status
         refreshHelperStatus()

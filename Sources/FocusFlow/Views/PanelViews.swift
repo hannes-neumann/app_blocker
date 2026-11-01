@@ -51,7 +51,7 @@ struct BreakView: View {
             }
 
             if let todo = state.suggestion {
-                Text("Passt in deine Pause:")
+                Text(L10n.text("pauseFit"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack(alignment: .firstTextBaseline) {
@@ -62,12 +62,12 @@ struct BreakView: View {
                     if let minutes = todo.estimatedMinutes { EstimateBadge(minutes: minutes) }
                 }
                 HStack {
-                    Button("Erledigt") { state.completeSuggestion() }
+                    Button(L10n.text("done")) { state.completeSuggestion() }
                         .keyboardShortcut(.defaultAction)
-                    Button("Anderer Vorschlag") { state.nextSuggestion() }
+                    Button(L10n.text("nextSuggestion")) { state.nextSuggestion() }
                 }
             } else {
-                Text("Kein offenes Todo passt in diese Pause. Gönn dir eine echte Pause!")
+                Text(L10n.text("noPauseTask"))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

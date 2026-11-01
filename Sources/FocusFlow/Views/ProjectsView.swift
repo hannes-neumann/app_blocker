@@ -79,18 +79,18 @@ private struct ProjectDetail: View {
                         .font(.title2.weight(.semibold))
                         .textFieldStyle(.plain)
                         .onSubmit(rename)
-                    Button("Speichern", action: rename)
+                    Button(L10n.text("save"), action: rename)
                     Spacer()
-                    Button("Projekt löschen", role: .destructive) {
+                    Button(L10n.text("delete"), role: .destructive) {
                         state.projects.delete(project.id)
                     }
                 }
-                Text("Aufgaben").font(.headline)
+                Text(L10n.text("tasks")).font(.headline)
                 HStack {
                     TextField("Neue Aufgabe, z. B. Kapitel 2 zusammenfassen", text: $taskTitle)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit(addTask)
-                    Button("Hinzufügen", action: addTask)
+                    Button(L10n.text("add"), action: addTask)
                         .disabled(taskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 if tasks.isEmpty {
@@ -142,7 +142,7 @@ private struct TaskRow: View {
                     .onSubmit { state.todos.setTitle(task.id, title: title) }
                 Spacer()
                 Button { expanded.toggle() } label: {
-                    Label("Apps", systemImage: "app.dashed")
+                    Label(L10n.text("apps"), systemImage: "app.dashed")
                 }.buttonStyle(.borderless)
                 Button { state.todos.delete(task.id) } label: {
                     Image(systemName: "trash")
@@ -169,11 +169,11 @@ private struct AppOverrideEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle("Eigene App-Regel verwenden", isOn: $custom)
+            Toggle(L10n.text("ownAppRule"), isOn: $custom)
                 .onChange(of: custom) { _, enabled in onChange(enabled ? apps : nil) }
             if custom {
                 if apps.isEmpty {
-                    Text("Keine Apps blockieren").foregroundStyle(.secondary)
+                    Text(L10n.text("noBlockedApps")).foregroundStyle(.secondary)
                 }
                 ForEach(apps) { app in
                     HStack {
@@ -196,7 +196,7 @@ private struct AppOverrideEditor: View {
 
                 }
             } else {
-                Text("Erbt die Regel des übergeordneten Bereichs.").font(.caption).foregroundStyle(.secondary)
+                Text(L10n.text("inheritRule")).font(.caption).foregroundStyle(.secondary)
             }
 
         }

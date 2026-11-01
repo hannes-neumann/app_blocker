@@ -1,5 +1,82 @@
 import Foundation
 
+enum AppLanguage: String, Codable, CaseIterable, Identifiable {
+    case german = "de"
+    case english = "en"
+
+    var id: String { rawValue }
+    var title: String { self == .german ? "Deutsch" : "English" }
+}
+
+enum L10n {
+    static var language: AppLanguage = .german
+
+    static func text(_ key: String) -> String {
+        translations[key]?[language] ?? key
+    }
+
+    static func text(_ key: String, _ values: CVarArg...) -> String {
+        String(format: text(key), arguments: values)
+    }
+
+    private static let translations: [String: [AppLanguage: String]] = [
+        "ready": [.german: "Bereit", .english: "Ready"],
+        "focus": [.german: "Fokus", .english: "Focus"],
+        "shortBreak": [.german: "Kurze Pause", .english: "Short break"],
+        "longBreak": [.german: "Lange Pause", .english: "Long break"],
+        "focusSection": [.german: "Fokus", .english: "Focus"],
+        "projects": [.german: "Projekte", .english: "Projects"],
+        "todos": [.german: "Todos", .english: "Tasks"],
+        "stats": [.german: "Statistik", .english: "Statistics"],
+        "settings": [.german: "Einstellungen", .english: "Settings"],
+        "timer": [.german: "Timer", .english: "Timer"],
+        "blocking": [.german: "Blockieren", .english: "Blocking"],
+        "general": [.german: "Allgemein", .english: "General"],
+        "language": [.german: "Sprache", .english: "Language"],
+        "german": [.german: "Deutsch", .english: "German"],
+        "english": [.german: "Englisch", .english: "English"],
+        "startFocus": [.german: "Fokus starten", .english: "Start focus"],
+        "resume": [.german: "Weiter", .english: "Resume"],
+        "pause": [.german: "Pause", .english: "Pause"],
+        "skip": [.german: "Überspringen", .english: "Skip"],
+        "stop": [.german: "Stopp", .english: "Stop"],
+        "today": [.german: "Heute", .english: "Today"],
+        "todaySummary": [.german: "Heute %d von %d Min", .english: "Today %d of %d min"],
+        "breakSuggestion": [.german: "Vorschlag für die Pause", .english: "Break suggestion"],
+        "statistics": [.german: "Statistik", .english: "Statistics"],
+        "done": [.german: "Erledigt", .english: "Done"],
+        "dashboard": [.german: "Dashboard", .english: "Dashboard"],
+        "quit": [.german: "Beenden", .english: "Quit"],
+        "add": [.german: "Hinzufügen", .english: "Add"],
+        "save": [.german: "Speichern", .english: "Save"],
+        "delete": [.german: "Löschen", .english: "Delete"],
+        "tasks": [.german: "Aufgaben", .english: "Tasks"],
+        "apps": [.german: "Apps", .english: "Apps"],
+        "websites": [.german: "Webseiten", .english: "Websites"],
+        "focusTimeByTask": [.german: "Fokuszeit pro Aufgabe", .english: "Focus time per task"],
+        "progress": [.german: "Dein Fortschritt", .english: "Your progress"],
+        "sevenDays": [.german: "7 Tage", .english: "7 days"],
+        "thirtyDays": [.german: "30 Tage", .english: "30 days"],
+        "taskSessionsRange": [.german: "Letzte Sitzungen im gewählten Zeitraum", .english: "Sessions in the selected period"],
+        "noTaskSessions": [.german: "Noch keine Aufgaben-Sessions", .english: "No task sessions yet"],
+        "chooseTaskHint": [.german: "Wähle vor dem Start eines Fokus eine Aufgabe aus.", .english: "Choose a task before starting focus."],
+        "noProjectTask": [.german: "Kein Projekt / keine Aufgabe", .english: "No project / task"],
+        "ownAppRule": [.german: "Eigene App-Regel verwenden", .english: "Use custom app rule"],
+        "inheritRule": [.german: "Erbt die Regel des übergeordneten Bereichs.", .english: "Inherits the rule from its parent."],
+        "noBlockedApps": [.german: "Keine Apps blockieren", .english: "Block no apps"],
+        "customDuration": [.german: "Eigene Dauer eingeben…", .english: "Enter custom duration…"]
+        , "pauseFit": [.german: "Passt in deine Pause:", .english: "Fits your break:"]
+        , "noPauseTask": [.german: "Kein offenes Todo passt in diese Pause. Gönn dir eine echte Pause!", .english: "No open task fits this break. Take a real break!"]
+        , "nextSuggestion": [.german: "Anderer Vorschlag", .english: "Another suggestion"]
+        , "upNext": [.german: "Als Nächstes", .english: "Up next"]
+        , "noOpenTasks": [.german: "Keine offenen Todos.", .english: "No open tasks."]
+        , "openTasks": [.german: "Offen (%d)", .english: "Open (%d)"]
+        , "completedTasks": [.german: "Erledigt (%d)", .english: "Completed (%d)"]
+        , "clearCompleted": [.german: "Erledigte löschen", .english: "Delete completed"]
+        , "aboutTotal": [.german: "Zusammen etwa %@", .english: "About %@ total"]
+    ]
+}
+
 enum Phase: String, Codable {
     case idle, focus, shortBreak, longBreak
 
@@ -7,10 +84,10 @@ enum Phase: String, Codable {
 
     var title: String {
         switch self {
-        case .idle: "Bereit"
-        case .focus: "Fokus"
-        case .shortBreak: "Kurze Pause"
-        case .longBreak: "Lange Pause"
+        case .idle: L10n.text("ready")
+        case .focus: L10n.text("focus")
+        case .shortBreak: L10n.text("shortBreak")
+        case .longBreak: L10n.text("longBreak")
         }
     }
 
@@ -38,6 +115,7 @@ struct Project: Codable, Identifiable, Equatable {
 }
 
 struct FocusSettings: Codable, Equatable {
+    var language: AppLanguage = .german
     var focusMinutes = 25
     var shortBreakMinutes = 5
     var longBreakMinutes = 15
@@ -54,6 +132,7 @@ struct FocusSettings: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = FocusSettings()
+        language = try c.decodeIfPresent(AppLanguage.self, forKey: .language) ?? d.language
         focusMinutes = try c.decodeIfPresent(Int.self, forKey: .focusMinutes) ?? d.focusMinutes
         shortBreakMinutes = try c.decodeIfPresent(Int.self, forKey: .shortBreakMinutes) ?? d.shortBreakMinutes
         longBreakMinutes = try c.decodeIfPresent(Int.self, forKey: .longBreakMinutes) ?? d.longBreakMinutes

@@ -9,9 +9,9 @@ struct SettingsView: View {
         @Bindable var state = state
         VStack(spacing: 0) {
             Picker("Bereich", selection: $tab) {
-                Label("Timer", systemImage: "timer").tag(0)
-                Label("Blockieren", systemImage: "hand.raised").tag(1)
-                Label("Allgemein", systemImage: "gearshape").tag(2)
+                Label(L10n.text("timer"), systemImage: "timer").tag(0)
+                Label(L10n.text("blocking"), systemImage: "hand.raised").tag(1)
+                Label(L10n.text("general"), systemImage: "gearshape").tag(2)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -185,10 +185,22 @@ private struct AppIcon: View {
 }
 
 private struct GeneralSettingsView: View {
+    @Environment(AppState.self) private var state
     let aiStatus: AIStatus
 
     var body: some View {
         Form {
+            Section(L10n.text("language")) {
+                Picker(L10n.text("language"), selection: Binding(
+                    get: { state.settings.language },
+                    set: { state.settings.language = $0 }
+                )) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language == .english ? L10n.text("english") : L10n.text("german"))
+                            .tag(language)
+                    }
+                }
+            }
             Section("Schnellnotiz") {
                 LabeledContent("Tastenkürzel", value: AppState.shortcutDescription)
                 Text("Öffnet überall ein kleines Textfeld. Deine Notiz wird zu einem konkreten Todo mit geschätzter Dauer, das dir in einer passenden Pause vorgeschlagen wird.")
