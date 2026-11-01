@@ -32,15 +32,6 @@ struct DayStat: Identifiable {
     var id: Date { day }
 }
 
-struct TaskStat: Identifiable {
-    var id: String { taskID?.uuidString ?? taskTitle }
-    var taskID: UUID?
-    var taskTitle: String
-    var projectName: String?
-    var focusMinutes: Double
-    var sessions: Int
-}
-
 @MainActor @Observable
 final class StatsStore {
     private(set) var focusRecords: [FocusRecord] = Storage.load([FocusRecord].self, from: "focus-sessions.json") ?? []
@@ -48,31 +39,41 @@ final class StatsStore {
 
     private var calendar: Calendar { .current }
 
+    /// Returns the new record, or nil for accidental starts under a minute.
+    @discardableResult
     func recordFocus(start: Date, focusedSeconds: Double, plannedSeconds: Double, completed: Bool,
-                     task: Todo?, project: Project?) {
-        // Ignore accidental starts.
-        guard focusedSeconds >= 60 else { return }
-        focusRecords.append(FocusRecord(start: start, end: Date(), focusedSeconds: focusedSeconds,
-                                        plannedSeconds: plannedSeconds, completed: completed,
-                                        taskID: task?.id, taskTitle: task?.title,
-                                        projectID: project?.id, projectName: project?.name))
+                     task: Todo?, project: Project?) -> FocusRecord? {
+        guard focusedSeconds >= 60 else { return nil }
+        let record = FocusRecord(start: start, end: Date(), focusedSeconds: focusedSeconds,
+                                 plannedSeconds: plannedSeconds, completed: completed,
+                                 taskID: task?.id, taskTitle: task?.title,
+                                 projectID: project?.id, projectName: project?.name)
+        focusRecords.append(record)
         Storage.save(focusRecords, to: "focus-sessions.json")
+        return record
     }
 
-    func taskStats(lastDays count: Int) -> [TaskStat] {
-        let since = calendar.date(byAdding: .day, value: -(count - 1), to: calendar.startOfDay(for: Date()))!
-        var stats: [String: TaskStat] = [:]
-        for record in focusRecords where record.start >= since {
-            guard let title = record.taskTitle else { continue }
-            let key = record.taskID?.uuidString ?? title
-            if stats[key] == nil {
-                stats[key] = TaskStat(taskID: record.taskID, taskTitle: title,
-                                      projectName: record.projectName, focusMinutes: 0, sessions: 0)
-            }
-            stats[key]!.focusMinutes += record.focusedSeconds / 60
-            stats[key]!.sessions += 1
+    /// Moves a past session to another project (or to none), e.g. when it was started without one.
+    func assign(_ recordID: UUID, to project: Project?) {
+        guard let index = focusRecords.firstIndex(where: { $0.id == recordID }) else { return }
+        let old = focusRecords[index].projectID
+        focusRecords[index].projectID = project?.id
+        focusRecords[index].projectName = project?.name
+        Storage.save(focusRecords, to: "focus-sessions.json")
+        Analytics.track(.sessionProjectChanged, ["record_id": .string(recordID.uuidString),
+                                                 "old_project_id": .string(old?.uuidString ?? ""),
+                                                 "new_project_id": .string(project?.id.uuidString ?? ""),
+                                                 "minutes": .int(Int(focusRecords[index].focusedSeconds / 60))])
+    }
+
+    /// Sessions of a deleted project become unassigned instead of pointing nowhere.
+    func detachProject(_ projectID: UUID) {
+        var changed = false
+        for i in focusRecords.indices where focusRecords[i].projectID == projectID {
+            focusRecords[i].projectID = nil
+            changed = true
         }
-        return stats.values.sorted { $0.focusMinutes > $1.focusMinutes }
+        if changed { Storage.save(focusRecords, to: "focus-sessions.json") }
     }
 
     func todoChanged(_ todo: Todo) {
@@ -104,16 +105,6 @@ final class StatsStore {
             byDay[day]?.todosDone += 1
         }
         return byDay.values.sorted { $0.day < $1.day }
-    }
-
-    /// Focus minutes per hour of the day (0–23) over the last `count` days.
-    func minutesByHour(lastDays count: Int) -> [(hour: Int, minutes: Double)] {
-        let since = calendar.date(byAdding: .day, value: -(count - 1), to: calendar.startOfDay(for: Date()))!
-        var minutes = Array(repeating: 0.0, count: 24)
-        for record in focusRecords where record.start >= since {
-            minutes[calendar.component(.hour, from: record.start)] += record.focusedSeconds / 60
-        }
-        return minutes.enumerated().map { (hour: $0.offset, minutes: $0.element) }
     }
 
     var todayFocusMinutes: Double {

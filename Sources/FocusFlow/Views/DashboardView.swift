@@ -6,148 +6,317 @@ enum DashboardSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .focus: L10n.text("focusSection")
+        case .focus: L10n.text("overview")
         case .projects: L10n.text("projects")
         case .todos: L10n.text("todos")
-        case .stats: L10n.text("stats")
+        case .stats: L10n.text("insights")
         case .settings: L10n.text("settings")
         }
     }
 
     var symbol: String {
         switch self {
-        case .focus: "timer"
+        case .focus: "square.grid.2x2"
         case .projects: "folder"
         case .todos: "checklist"
-        case .stats: "chart.bar.xaxis"
+        case .stats: "chart.xyaxis.line"
         case .settings: "gearshape"
         }
     }
 }
 
+/// What the sidebar can select: a page, or one project.
+private enum SidebarItem: Hashable {
+    case section(DashboardSection)
+    case project(UUID)
+}
+
 struct DashboardView: View {
     @Environment(AppState.self) private var state
+    @State private var creatingProject = false
 
     var body: some View {
-        @Bindable var state = state
         NavigationSplitView {
-            List(DashboardSection.allCases, selection: $state.dashboardSection) { section in
-                Label(section.title, systemImage: section.symbol)
-                    .badge(section == .todos ? state.todos.open.count : 0)
-                    .tag(section)
+            List(selection: selection) {
+                Section {
+                    row(.focus)
+                    row(.todos).badge(state.todos.open.count)
+                    row(.stats)
+                }
+                Section {
+                    Label(L10n.text("allProjects"), systemImage: DashboardSection.projects.symbol)
+                        .tag(SidebarItem.section(.projects))
+                    ForEach(state.projects.projects) { project in
+                        HStack(spacing: 8) {
+                            ProjectDot(colorIndex: project.colorIndex, size: 9)
+                            Text(project.name).lineLimit(1)
+                            Spacer()
+                            Text(formatDuration(weekMinutes(project)))
+                                .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                        }
+                        .tag(SidebarItem.project(project.id))
+                    }
+                    Button { creatingProject = true } label: {
+                        Label(L10n.text("newProject"), systemImage: "plus")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                } header: {
+                    Text(L10n.text("projects"))
+                }
+                Section {
+                    row(.settings)
+                }
             }
-            .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
+            .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 280)
         } detail: {
             switch state.dashboardSection {
-            case .focus: FocusPage()
-            case .projects: ProjectsView()
+            case .focus: OverviewPage()
+            case .projects:
+                if let id = state.openProjectID, let project = state.projects.project(id) {
+                    ProjectDetailPage(project: project)
+                } else {
+                    ProjectsOverviewPage()
+                }
             case .todos: TodosPage()
-            case .stats: StatsView()
+            case .stats: InsightsPage()
             case .settings: SettingsView()
             }
         }
-        .navigationTitle(state.dashboardSection.title)
-        .frame(minWidth: 860, minHeight: 600)
-    }
-}
-
-// MARK: - Focus
-
-private struct FocusPage: View {
-    @Environment(AppState.self) private var state
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .top, spacing: 20) {
-                    timerCard
-                    VStack(spacing: 12) {
-                        todayCard
-                        if state.phase.isBreak { suggestionCard }
-                    }
-                    .frame(width: 280)
-                }
-                BlockingWarnings()
-                upNextCard
+        .navigationTitle(title)
+        .frame(minWidth: 940, minHeight: 640)
+        .sheet(isPresented: $creatingProject) {
+            ProjectEditorSheet(project: nil) { project in
+                state.openProjectID = project.id
+                state.dashboardSection = .projects
             }
-            .padding(24)
         }
     }
 
-    private var timerCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+    private func row(_ section: DashboardSection) -> some View {
+        Label(section.title, systemImage: section.symbol).tag(SidebarItem.section(section))
+    }
+
+    private var title: String {
+        if state.dashboardSection == .projects, let project = state.projects.project(state.openProjectID) { return project.name }
+        return state.dashboardSection.title
+    }
+
+    private var selection: Binding<SidebarItem?> {
+        Binding {
+            if state.dashboardSection == .projects, let id = state.openProjectID { return .project(id) }
+            return .section(state.dashboardSection)
+        } set: { item in
+            switch item {
+            case .section(let section):
+                state.openProjectID = nil
+                state.dashboardSection = section
+            case .project(let id):
+                state.openProjectID = id
+                state.dashboardSection = .projects
+                Analytics.track(.projectOpened, ["project_id": .string(id.uuidString), "source": "sidebar"])
+            case nil:
+                break
+            }
+        }
+    }
+
+    private func weekMinutes(_ project: Project) -> Double {
+        let start = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+        return state.stats.focusRecords.filter { $0.projectID == project.id && $0.start >= start }
+            .reduce(0) { $0 + $1.focusedSeconds / 60 }
+    }
+}
+
+// MARK: - Overview
+
+private struct OverviewPage: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        let week = InsightsReport(records: state.stats.focusRecords, todos: state.todos.todos, projects: state.projects.projects,
+                                  days: 7, dailyGoal: state.settings.dailyGoalMinutes)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                greeting
+                HStack(alignment: .top, spacing: 18) {
+                    TimerHeroCard()
+                    VStack(spacing: 18) {
+                        TodayCard()
+                        if state.phase.isBreak { BreakCard() }
+                    }
+                    .frame(width: 300)
+                }
+                BlockingWarnings()
+                kpis(week)
+                HStack(alignment: .top, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        CardHeader(title: L10n.text("thisWeek"), subtitle: L10n.text("minutesPerDayByProject"))
+                        if week.totalMinutes < 1 {
+                            EmptyHint(symbol: "chart.bar", text: L10n.text("noFocusYetWeek"))
+                        } else {
+                            StackedFocusChart(report: week, goal: state.settings.dailyGoalMinutes).frame(height: 210)
+                        }
+                    }
+                    .card()
+                    VStack(alignment: .leading, spacing: 14) {
+                        CardHeader(title: L10n.text("insights")) {
+                            Button(L10n.text("showAll")) { state.dashboardSection = .stats }.buttonStyle(.link).font(.caption)
+                        }
+                        InsightList(insights: week.insights, limit: 3)
+                    }
+                    .card()
+                    .frame(width: 320)
+                }
+                HStack(alignment: .top, spacing: 18) {
+                    TodaySessionsCard()
+                    UpNextCard()
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 1200)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var greeting: some View {
+        let hour = Calendar.current.component(.hour, from: Date())
+        let key = hour < 11 ? "greetingMorning" : hour < 17 ? "greetingDay" : "greetingEvening"
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(L10n.text(key)).font(.largeTitle.weight(.bold))
+            Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide).locale(L10n.locale)))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func kpis(_ week: InsightsReport) -> some View {
+        Grid(horizontalSpacing: 14) {
+            GridRow {
+                StatTile(title: L10n.text("focusThisWeek"), value: formatDuration(week.totalMinutes),
+                         detail: L10n.text("vsLastWeekNone"), trend: week.trend, symbol: "timer")
+                StatTile(title: L10n.text("sessions"), value: "\(week.sessions)",
+                         detail: week.sessions == 0 ? L10n.text("noSessionsYet")
+                             : L10n.text("avgSession", formatDuration(week.averageSessionMinutes)),
+                         symbol: "repeat")
+                StatTile(title: L10n.text("completionRate"),
+                         value: week.completionRate.map { "\(Int(($0 * 100).rounded()))" } ?? "–", unit: week.completionRate == nil ? "" : "%",
+                         detail: L10n.text("completionRateDetail"), progress: week.completionRate, symbol: "checkmark.seal")
+                StatTile(title: L10n.text("streak"), value: "\(state.stats.streak)",
+                         unit: L10n.text(state.stats.streak == 1 ? "day" : "days"),
+                         detail: L10n.text("goalDaysThisWeek", week.goalDays), symbol: "flame")
+            }
+        }
+    }
+}
+
+/// The timer itself, with the project the session counts for.
+private struct TimerHeroCard: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        let project = state.selectedProject
+        let color = state.phase.isBreak ? Color.green : project?.color ?? .accentColor
+        VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .firstTextBaseline) {
                 Label(state.phase.title, systemImage: state.phase.symbol).font(.title3.weight(.semibold))
                 Spacer()
                 Text(state.cycleText).foregroundStyle(.secondary)
             }
-            Text(state.phase == .idle ? String(format: "%02d:00", state.settings.focusMinutes) : state.remainingText)
-                .font(.system(size: 88, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .frame(maxWidth: .infinity)
-            ProgressView(value: state.progress)
-                .tint(state.phase.isBreak ? .green : .accentColor)
-            TaskPicker()
-            TimerControls(large: true)
-            Text(blockingSummary).font(.caption).foregroundStyle(.secondary)
+            HStack(alignment: .center, spacing: 28) {
+                Ring(progress: state.phase == .idle ? 0 : state.progress, color: color, lineWidth: 12) {
+                    VStack(spacing: 4) {
+                        Text(state.phase == .idle ? String(format: "%02d:00", state.settings.focusMinutes) : state.remainingText)
+                            .font(.system(size: 46, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                        if state.phase != .idle {
+                            HStack(spacing: 5) {
+                                if !state.phase.isBreak { ProjectDot(colorIndex: project?.colorIndex, size: 8) }
+                                Text(state.phase.isBreak ? state.phase.title : project?.name ?? L10n.text("noProject"))
+                                    .lineLimit(1)
+                            }
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(20)
+                }
+                .frame(width: 210, height: 210)
+                VStack(alignment: .leading, spacing: 16) {
+                    if state.phase == .focus {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(L10n.text("workingOn")).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                            HStack(spacing: 8) {
+                                if let project { ProjectIcon(project: project, size: 26) }
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(project?.name ?? L10n.text("noProject")).font(.headline)
+                                    if let task = state.selectedTask { Text(task.title).foregroundStyle(.secondary).lineLimit(2) }
+                                }
+                            }
+                        }
+                    } else {
+                        FocusTargetPicker()
+                    }
+                    TimerControls(large: true)
+                    Text(blockingSummary).font(.caption).foregroundStyle(.secondary)
+                }
+            }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity)
-        .card()
+        .card(padding: 22)
     }
 
     private var blockingSummary: String {
         let apps = state.activeBlockedApps.count
         let domains = state.settings.blockDomains ? state.settings.blockedDomains.count : 0
-        return "Im Fokus blockiert: \(apps) \(apps == 1 ? "App" : "Apps") · \(domains) \(domains == 1 ? "Webseite" : "Webseiten")"
+        return L10n.text("blockingSummary", apps, domains)
     }
+}
 
-    private struct TaskPicker: View {
-        @Environment(AppState.self) private var state
+private struct TodayCard: View {
+    @Environment(AppState.self) private var state
 
-        var body: some View {
-            Picker("Fokusaufgabe", selection: Binding(
-                get: { state.selectedTaskID },
-                set: { state.selectedTaskID = $0 }
-            )) {
-                Text(L10n.text("noProjectTask")).tag(UUID?.none)
-                ForEach(state.projects.projects) { project in
-                    Section(project.name) {
-                        ForEach(state.todos.open.filter { $0.projectID == project.id }) { task in
-                            Text(task.title).tag(UUID?.some(task.id))
-                        }
+    var body: some View {
+        let today = state.stats.todayFocusMinutes
+        let goal = state.settings.dailyGoalMinutes
+        let sessions = state.stats.focusRecords.filter { Calendar.current.isDateInToday($0.start) }.count
+        VStack(alignment: .leading, spacing: 14) {
+            Text(L10n.text("today")).font(.headline)
+            HStack(spacing: 16) {
+                Ring(progress: today / Double(max(goal, 1)), color: .accentColor, lineWidth: 9) {
+                    VStack(spacing: 0) {
+                        Text("\(Int((min(today / Double(max(goal, 1)), 9.99) * 100).rounded()))%")
+                            .font(.system(size: 20, weight: .semibold, design: .rounded)).monospacedDigit()
+                        Text(L10n.text("ofGoal")).font(.caption2).foregroundStyle(.secondary)
                     }
                 }
+                .frame(width: 92, height: 92)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text("\(Int(today))").font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
+                        Text("/ \(goal) \(L10n.text("minUnit"))").foregroundStyle(.secondary)
+                    }
+                    Text(L10n.text(sessions == 1 ? "sessionsTodayOne" : "sessionsToday", sessions)).font(.callout).foregroundStyle(.secondary)
+                    Text(today >= Double(goal) ? L10n.text("goalReached") : L10n.text("minutesLeft", goal - Int(today)))
+                        .font(.caption).foregroundStyle(today >= Double(goal) ? .green : .secondary)
+                }
             }
-            .labelsHidden()
-            .disabled(state.phase != .idle)
         }
-    }
-
-    private var todayCard: some View {
-        let today = Int(state.stats.todayFocusMinutes)
-        let goal = state.settings.dailyGoalMinutes
-        let streak = state.stats.streak
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(L10n.text("today")).font(.headline)
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text("\(today)").font(.system(size: 32, weight: .semibold, design: .rounded)).monospacedDigit()
-                Text("/ \(goal) Min").foregroundStyle(.secondary)
-            }
-            ProgressView(value: Double(min(today, goal)), total: Double(max(goal, 1)))
-            Text(streak > 0 ? "Serie: \(streak) \(streak == 1 ? "Tag" : "Tage") in Folge" : "Starte heute deine Serie")
-                .font(.caption).foregroundStyle(.secondary)
-            Button(L10n.text("statistics")) { state.dashboardSection = .stats }
-                .buttonStyle(.link)
-                .font(.caption)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .card()
     }
+}
 
-    private var suggestionCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+/// During a break: assign the session that just ended and see what fits into the break.
+private struct BreakCard: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let record = state.lastFocusRecord {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L10n.text("lastSession")).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                    SessionRow(record: record)
+                }
+                Divider()
+            }
             Text(L10n.text("breakSuggestion")).font(.headline)
             if let todo = state.suggestion {
                 Text(todo.title).fixedSize(horizontal: false, vertical: true)
@@ -157,27 +326,92 @@ private struct FocusPage: View {
                     Button(L10n.text("nextSuggestion")) { state.nextSuggestion() }
                 }
             } else {
-                Text("Nichts passt rein, einfach durchatmen.").foregroundStyle(.secondary)
+                Text(L10n.text("noPauseTask")).foregroundStyle(.secondary)
             }
         }
-        .padding(16)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
+}
 
-    private var upNextCard: some View {
-        let open = state.todos.open
-        return VStack(alignment: .leading, spacing: 10) {
+private struct TodaySessionsCard: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        let sessions = state.stats.focusRecords.filter { Calendar.current.isDateInToday($0.start) }.sorted { $0.start > $1.start }
+        let unassigned = sessions.filter { $0.projectID == nil }.count
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(title: L10n.text("todaysSessions"),
+                       subtitle: unassigned > 0 ? L10n.text("unassignedHint", unassigned) : L10n.text("sessionsAssignHint"))
+            if sessions.isEmpty {
+                EmptyHint(symbol: "timer", text: L10n.text("noSessionsToday"))
+            } else {
+                DayTimeline(records: sessions)
+                VStack(spacing: 0) {
+                    ForEach(sessions.prefix(6)) { record in
+                        SessionRow(record: record)
+                        if record.id != sessions.prefix(6).last?.id { Divider() }
+                    }
+                }
+            }
+        }
+        .card()
+    }
+}
+
+/// Today's sessions as colored blocks on a time axis.
+private struct DayTimeline: View {
+    @Environment(AppState.self) private var state
+    let records: [FocusRecord]
+
+    var body: some View {
+        let calendar = Calendar.current
+        let hours = records.flatMap { [calendar.component(.hour, from: $0.start), calendar.component(.hour, from: $0.end)] }
+        let first = max(0, min(hours.min() ?? 8, 8))
+        let last = min(24, max((hours.max() ?? 18) + 1, 18))
+        let dayStart = calendar.startOfDay(for: Date())
+        let span = Double(last - first) * 3600
+        VStack(spacing: 4) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.05))
+                    ForEach(records) { record in
+                        let offset = record.start.timeIntervalSince(dayStart) - Double(first) * 3600
+                        let width = max(record.end.timeIntervalSince(record.start), 60)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(state.projects.project(record.projectID)?.color ?? ProjectPalette.none)
+                            .frame(width: max(3, geo.size.width * width / span))
+                            .offset(x: geo.size.width * offset / span)
+                            .help(state.projects.project(record.projectID)?.name ?? L10n.text("noProject"))
+                    }
+                }
+            }
+            .frame(height: 18)
             HStack {
-                Text(L10n.text("upNext")).font(.headline)
-                Spacer()
+                ForEach(Array(stride(from: first, through: last, by: max(1, (last - first) / 4))), id: \.self) { hour in
+                    Text(L10n.text("hourLabel", hour)).font(.caption2).foregroundStyle(.secondary)
+                    if hour < last { Spacer() }
+                }
+            }
+        }
+    }
+}
+
+private struct UpNextCard: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        let open = state.todos.open
+        VStack(alignment: .leading, spacing: 12) {
+            CardHeader(title: L10n.text("upNext"), subtitle: L10n.text("aboutTotal", formatMinutes(open.compactMap(\.estimatedMinutes).reduce(0, +)))) {
                 if open.count > 5 {
-                    Button("Alle \(open.count) Todos") { state.dashboardSection = .todos }.buttonStyle(.link)
+                    Button(L10n.text("allTodos", open.count)) { state.dashboardSection = .todos }.buttonStyle(.link).font(.caption)
                 }
             }
             NoteField()
             if open.isEmpty {
-                Text(L10n.text("noOpenTasks")).foregroundStyle(.secondary)
+                EmptyHint(symbol: "tray", text: L10n.text("noOpenTasks"))
             } else {
                 VStack(spacing: 0) {
                     ForEach(open.prefix(5)) { todo in
@@ -187,8 +421,20 @@ private struct FocusPage: View {
                 }
             }
         }
-        .padding(20)
         .card()
+    }
+}
+
+struct EmptyHint: View {
+    let symbol: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).font(.title3).foregroundStyle(.tertiary)
+            Text(text).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 60)
     }
 }
 
@@ -197,13 +443,15 @@ private struct FocusPage: View {
 private struct TodosPage: View {
     @Environment(AppState.self) private var state
     @State private var showDone = false
+    @State private var projectFilter: UUID??
 
     var body: some View {
-        let todos = showDone ? state.todos.done : state.todos.open
-        let total = state.todos.open.compactMap(\.estimatedMinutes).reduce(0, +)
+        let base = showDone ? state.todos.done : state.todos.open
+        let todos = projectFilter.map { filter in base.filter { $0.projectID == filter } } ?? base
+        let total = todos.filter { !$0.isDone }.compactMap(\.estimatedMinutes).reduce(0, +)
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Picker("Anzeigen", selection: $showDone) {
+                Picker(L10n.text("show"), selection: $showDone) {
                     Text(L10n.text("openTasks", state.todos.open.count)).tag(false)
                     Text(L10n.text("completedTasks", state.todos.done.count)).tag(true)
                 }
@@ -211,10 +459,18 @@ private struct TodosPage: View {
                 .labelsHidden()
                 .fixedSize()
                 .onChange(of: showDone) { Analytics.track(.todoListFilterChanged, ["filter": showDone ? "done" : "open"]) }
+                Picker(L10n.text("project"), selection: $projectFilter) {
+                    Text(L10n.text("allProjects")).tag(UUID??.none)
+                    Text(L10n.text("noProject")).tag(UUID??.some(nil))
+                    ForEach(state.projects.projects) { project in
+                        Text(project.name).tag(UUID??.some(project.id))
+                    }
+                }
+                .fixedSize()
                 Spacer()
                 if showDone {
                     Button(L10n.text("clearCompleted")) { state.todos.clearDone(source: "dashboard") }
-                        .disabled(todos.isEmpty)
+                        .disabled(state.todos.done.isEmpty)
                 } else {
                     Text(L10n.text("aboutTotal", formatMinutes(total))).foregroundStyle(.secondary)
                 }
@@ -222,15 +478,15 @@ private struct TodosPage: View {
             if !showDone { NoteField() }
 
             if todos.isEmpty {
-                ContentUnavailableView(showDone ? "Noch nichts erledigt" : "Keine offenen Todos",
+                ContentUnavailableView(L10n.text(showDone ? "nothingDoneYet" : "noOpenTasks"),
                                        systemImage: showDone ? "checkmark.circle" : "tray",
-                                       description: Text(showDone ? "" : "Notiere etwas oben oder überall mit \(AppState.shortcutDescription)."))
+                                       description: Text(showDone ? "" : L10n.text("captureHint", AppState.shortcutDescription)))
                     .frame(maxHeight: .infinity)
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(todos) { todo in
-                            DashboardTodoRow(todo: todo)
+                            DashboardTodoRow(todo: todo, showProject: true)
                             Divider()
                         }
                     }
@@ -242,12 +498,12 @@ private struct TodosPage: View {
 }
 
 /// Adds a note that is turned into todos, like the quick capture.
-private struct NoteField: View {
+struct NoteField: View {
     @Environment(AppState.self) private var state
     @State private var text = ""
 
     var body: some View {
-        TextField("Notiz hinzufügen, wird zu Todos mit Zeitschätzung…", text: $text)
+        TextField(L10n.text("noteFieldPlaceholder"), text: $text)
             .textFieldStyle(.roundedBorder)
             .onSubmit {
                 state.todos.capture(text, source: "dashboard")
@@ -256,9 +512,10 @@ private struct NoteField: View {
     }
 }
 
-private struct DashboardTodoRow: View {
+struct DashboardTodoRow: View {
     @Environment(AppState.self) private var state
     let todo: Todo
+    var showProject = false
     @State private var title = ""
     @FocusState private var editing: Bool
 
@@ -273,7 +530,7 @@ private struct DashboardTodoRow: View {
             .disabled(todo.isRefining)
 
             VStack(alignment: .leading, spacing: 3) {
-                TextField("Titel", text: $title, axis: .vertical)
+                TextField(L10n.text("title"), text: $title, axis: .vertical)
                     .textFieldStyle(.plain)
                     .strikethrough(todo.isDone)
                     .foregroundStyle(todo.isDone ? .secondary : .primary)
@@ -286,12 +543,13 @@ private struct DashboardTodoRow: View {
 
             Spacer(minLength: 8)
 
+            if showProject && !todo.isRefining { projectMenu }
             if todo.isRefining {
                 ProgressView().controlSize(.small)
             } else {
                 if todo.refinedByAI {
                     Image(systemName: "sparkles").foregroundStyle(.purple)
-                        .help("Von der KI formuliert und geschätzt")
+                        .help(L10n.text("refinedByAI"))
                 }
                 EstimateControl(todo: todo)
             }
@@ -299,20 +557,41 @@ private struct DashboardTodoRow: View {
                 Image(systemName: "trash").foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .help("Löschen")
+            .help(L10n.text("delete"))
         }
         .padding(.vertical, 8)
         .onAppear { title = todo.title }
         .onChange(of: todo.title) { _, new in if !editing { title = new } }
     }
 
+    private var projectMenu: some View {
+        let project = state.projects.project(todo.projectID)
+        return Menu {
+            Button(L10n.text("noProject")) { state.todos.setProject(todo.id, projectID: nil) }
+            Divider()
+            ForEach(state.projects.projects) { item in
+                Button(item.name) { state.todos.setProject(todo.id, projectID: item.id) }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                ProjectDot(colorIndex: project?.colorIndex, size: 7)
+                Text(project?.name ?? L10n.text("noProject")).font(.caption)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(L10n.text("moveToProject"))
+    }
+
     private var detail: String {
         var parts: [String] = []
-        if todo.sourceNote != todo.title { parts.append("Notiz: \(todo.sourceNote)") }
+        if todo.sourceNote != todo.title { parts.append(L10n.text("notePrefix", todo.sourceNote)) }
+        let relative = Date.RelativeFormatStyle(presentation: .named).locale(L10n.locale)
         if let done = todo.completedAt {
-            parts.append("erledigt \(done.formatted(.relative(presentation: .named)))")
+            parts.append(L10n.text("completedAgo", done.formatted(relative)))
         } else {
-            parts.append("notiert \(todo.createdAt.formatted(.relative(presentation: .named)))")
+            parts.append(L10n.text("notedAgo", todo.createdAt.formatted(relative)))
         }
         return parts.joined(separator: " · ")
     }
@@ -320,11 +599,5 @@ private struct DashboardTodoRow: View {
     private func saveTitle() {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { title = todo.title } else if trimmed != todo.title { state.todos.setTitle(todo.id, title: trimmed) }
-    }
-}
-
-private extension View {
-    func card() -> some View {
-        background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
     }
 }

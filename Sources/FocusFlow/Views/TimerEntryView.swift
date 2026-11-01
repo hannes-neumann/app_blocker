@@ -22,7 +22,7 @@ struct TimerEntryView: View {
                 Image(systemName: "timer")
                     .font(.title2)
                     .foregroundStyle(.secondary)
-                TextField("Dauer, z. B. 25 min oder 1:30", text: $text)
+                TextField(L10n.text("durationPlaceholder"), text: $text)
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .focused($focused)
@@ -36,14 +36,14 @@ struct TimerEntryView: View {
             }
             HStack(spacing: 8) {
                 ForEach([15, 25, 45, 60], id: \.self) { minutes in
-                    Button("\(minutes) min") {
+                    Button(formatMinutes(minutes)) {
                         text = "\(minutes)"
                         start()
                     }
                     .buttonStyle(.bordered)
                 }
             }
-            Text("↩ starten · esc schließen · Eingaben wie 25 min, 1h oder 1:30")
+            Text(L10n.text("timerEntryFooter"))
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }

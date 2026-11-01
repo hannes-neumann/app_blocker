@@ -30,13 +30,27 @@ final class AppState {
     var dashboardSection: DashboardSection = .focus {
         didSet { if dashboardSection != oldValue { Analytics.track(.dashboardSectionViewed, ["section": .string(dashboardSection.rawValue)]) } }
     }
+    /// The project shown on its own page in the dashboard.
+    var openProjectID: UUID?
     var selectedTaskID: UUID? {
         didSet {
             guard selectedTaskID != oldValue else { return }
+            // A task belongs to its project, so picking one picks that project too.
+            if let projectID = selectedTask?.projectID { selectedProjectID = projectID }
             Analytics.track(.focusTaskSelected, ["todo_id": .string(selectedTaskID?.uuidString ?? ""),
                                                  "has_project": .bool(selectedTask?.projectID != nil)])
         }
     }
+    /// The project the next focus session counts for, also without a task.
+    var selectedProjectID: UUID? {
+        didSet {
+            guard selectedProjectID != oldValue else { return }
+            if let task = selectedTask, task.projectID != selectedProjectID { selectedTaskID = nil }
+            Analytics.track(.focusProjectSelected, ["project_id": .string(selectedProjectID?.uuidString ?? "")])
+        }
+    }
+    /// The session that just ended, so it can still be assigned to a project during the break.
+    private(set) var lastFocusRecordID: UUID?
 
     var selectedTask: Todo? {
         guard let selectedTaskID else { return nil }
@@ -44,7 +58,27 @@ final class AppState {
     }
 
     var selectedProject: Project? {
-        projects.project(selectedTask?.projectID)
+        projects.project(selectedTask?.projectID ?? selectedProjectID)
+    }
+
+    var lastFocusRecord: FocusRecord? {
+        guard let lastFocusRecordID else { return nil }
+        return stats.focusRecords.first { $0.id == lastFocusRecordID }
+    }
+
+    /// Starts a focus session that counts for the given project.
+    func startFocus(for project: Project, source: String) {
+        guard phase == .idle else { return }
+        selectedProjectID = project.id
+        startFocus(source: source)
+    }
+
+    func deleteProject(_ id: UUID) {
+        if selectedProjectID == id { selectedProjectID = nil }
+        if openProjectID == id { openProjectID = nil }
+        for todo in todos.todos where todo.projectID == id { todos.setProject(todo.id, projectID: nil) }
+        stats.detachProject(id)
+        projects.delete(id)
     }
 
     var activeBlockedApps: [BlockedApp] {
@@ -80,7 +114,7 @@ final class AppState {
         let n = max(settings.sessionsUntilLongBreak, 1)
         // During a break the round that just ended counts; otherwise the one that is running or next.
         let round = phase.isBreak ? (completedFocusSessions - 1) % n + 1 : completedFocusSessions % n + 1
-        return "Runde \(round) von \(n)"
+        return L10n.text("roundOf", round, n)
     }
 
     func setup() {
@@ -232,9 +266,9 @@ final class AppState {
         guard let start = focusStartedAt else { return }
         if !isPaused { remaining = max(0, (endDate ?? Date()).timeIntervalSinceNow) }
         // Paused time is excluded because `remaining` does not move while paused.
-        stats.recordFocus(start: start, focusedSeconds: phaseDuration - remaining,
-                          plannedSeconds: phaseDuration, completed: completed,
-                          task: selectedTask, project: selectedProject)
+        lastFocusRecordID = stats.recordFocus(start: start, focusedSeconds: phaseDuration - remaining,
+                                              plannedSeconds: phaseDuration, completed: completed,
+                                              task: selectedTask, project: selectedProject)?.id
         focusStartedAt = nil
     }
 
@@ -278,7 +312,7 @@ final class AppState {
         if blockDomains && !isHelperInstalled {
             // Ask automatically only once per launch; afterwards the menu offers a button.
             if askedForHelper {
-                domainBlockError = "Webseiten werden nicht blockiert, der Helfer ist nicht installiert."
+                domainBlockError = L10n.text("helperMissingError")
             } else {
                 askedForHelper = true
                 installHelper()
@@ -301,7 +335,7 @@ final class AppState {
             let ok = await domainBlocker.installHelper()
             Analytics.track(.helperInstalled, ["success": .bool(ok)])
             refreshHelperStatus()
-            domainBlockError = ok ? nil : "Webseiten werden nicht blockiert (Installation des Helfers abgebrochen)."
+            domainBlockError = ok ? nil : L10n.text("helperCancelledError")
         }
     }
 

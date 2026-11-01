@@ -1,83 +1,5 @@
 import Foundation
 
-enum AppLanguage: String, Codable, CaseIterable, Identifiable {
-    case german = "de"
-    case english = "en"
-
-    var id: String { rawValue }
-    var title: String { self == .german ? "Deutsch" : "English" }
-}
-
-enum L10n {
-    static var language: AppLanguage = .german
-
-    static func text(_ key: String) -> String {
-        translations[key]?[language] ?? key
-    }
-
-    static func text(_ key: String, _ values: CVarArg...) -> String {
-        String(format: text(key), arguments: values)
-    }
-
-    private static let translations: [String: [AppLanguage: String]] = [
-        "ready": [.german: "Bereit", .english: "Ready"],
-        "focus": [.german: "Fokus", .english: "Focus"],
-        "shortBreak": [.german: "Kurze Pause", .english: "Short break"],
-        "longBreak": [.german: "Lange Pause", .english: "Long break"],
-        "focusSection": [.german: "Fokus", .english: "Focus"],
-        "projects": [.german: "Projekte", .english: "Projects"],
-        "todos": [.german: "Todos", .english: "Tasks"],
-        "stats": [.german: "Statistik", .english: "Statistics"],
-        "settings": [.german: "Einstellungen", .english: "Settings"],
-        "timer": [.german: "Timer", .english: "Timer"],
-        "blocking": [.german: "Blockieren", .english: "Blocking"],
-        "general": [.german: "Allgemein", .english: "General"],
-        "ai": [.german: "KI", .english: "AI"],
-        "language": [.german: "Sprache", .english: "Language"],
-        "german": [.german: "Deutsch", .english: "German"],
-        "english": [.german: "Englisch", .english: "English"],
-        "startFocus": [.german: "Fokus starten", .english: "Start focus"],
-        "resume": [.german: "Weiter", .english: "Resume"],
-        "pause": [.german: "Pause", .english: "Pause"],
-        "skip": [.german: "Überspringen", .english: "Skip"],
-        "stop": [.german: "Stopp", .english: "Stop"],
-        "today": [.german: "Heute", .english: "Today"],
-        "todaySummary": [.german: "Heute %d von %d Min", .english: "Today %d of %d min"],
-        "breakSuggestion": [.german: "Vorschlag für die Pause", .english: "Break suggestion"],
-        "statistics": [.german: "Statistik", .english: "Statistics"],
-        "done": [.german: "Erledigt", .english: "Done"],
-        "dashboard": [.german: "Dashboard", .english: "Dashboard"],
-        "quit": [.german: "Beenden", .english: "Quit"],
-        "add": [.german: "Hinzufügen", .english: "Add"],
-        "save": [.german: "Speichern", .english: "Save"],
-        "delete": [.german: "Löschen", .english: "Delete"],
-        "tasks": [.german: "Aufgaben", .english: "Tasks"],
-        "apps": [.german: "Apps", .english: "Apps"],
-        "websites": [.german: "Webseiten", .english: "Websites"],
-        "focusTimeByTask": [.german: "Fokuszeit pro Aufgabe", .english: "Focus time per task"],
-        "progress": [.german: "Dein Fortschritt", .english: "Your progress"],
-        "sevenDays": [.german: "7 Tage", .english: "7 days"],
-        "thirtyDays": [.german: "30 Tage", .english: "30 days"],
-        "taskSessionsRange": [.german: "Letzte Sitzungen im gewählten Zeitraum", .english: "Sessions in the selected period"],
-        "noTaskSessions": [.german: "Noch keine Aufgaben-Sessions", .english: "No task sessions yet"],
-        "chooseTaskHint": [.german: "Wähle vor dem Start eines Fokus eine Aufgabe aus.", .english: "Choose a task before starting focus."],
-        "noProjectTask": [.german: "Kein Projekt / keine Aufgabe", .english: "No project / task"],
-        "ownAppRule": [.german: "Eigene App-Regel verwenden", .english: "Use custom app rule"],
-        "inheritRule": [.german: "Erbt die Regel des übergeordneten Bereichs.", .english: "Inherits the rule from its parent."],
-        "noBlockedApps": [.german: "Keine Apps blockieren", .english: "Block no apps"],
-        "customDuration": [.german: "Eigene Dauer eingeben…", .english: "Enter custom duration…"]
-        , "pauseFit": [.german: "Passt in deine Pause:", .english: "Fits your break:"]
-        , "noPauseTask": [.german: "Kein offenes Todo passt in diese Pause. Gönn dir eine echte Pause!", .english: "No open task fits this break. Take a real break!"]
-        , "nextSuggestion": [.german: "Anderer Vorschlag", .english: "Another suggestion"]
-        , "upNext": [.german: "Als Nächstes", .english: "Up next"]
-        , "noOpenTasks": [.german: "Keine offenen Todos.", .english: "No open tasks."]
-        , "openTasks": [.german: "Offen (%d)", .english: "Open (%d)"]
-        , "completedTasks": [.german: "Erledigt (%d)", .english: "Completed (%d)"]
-        , "clearCompleted": [.german: "Erledigte löschen", .english: "Delete completed"]
-        , "aboutTotal": [.german: "Zusammen etwa %@", .english: "About %@ total"]
-    ]
-}
-
 enum Phase: String, Codable {
     case idle, focus, shortBreak, longBreak
 
@@ -113,6 +35,30 @@ struct Project: Codable, Identifiable, Equatable {
     var createdAt = Date()
     /// nil means that the global blocking configuration is inherited.
     var blockedApps: [BlockedApp]?
+    /// Slot in `ProjectPalette`; stays with the project so its color never changes.
+    var colorIndex = 0
+    var symbol = "folder.fill"
+    /// Optional focus target per week.
+    var weeklyGoalMinutes: Int?
+
+    init(name: String, colorIndex: Int = 0, symbol: String = "folder.fill") {
+        self.name = name
+        self.colorIndex = colorIndex
+        self.symbol = symbol
+    }
+
+    // Projects saved before colors existed still load.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        blockedApps = try c.decodeIfPresent([BlockedApp].self, forKey: .blockedApps)
+        // -1 marks "no color yet"; ProjectStore hands out a free one on load.
+        colorIndex = try c.decodeIfPresent(Int.self, forKey: .colorIndex) ?? -1
+        symbol = try c.decodeIfPresent(String.self, forKey: .symbol) ?? "folder.fill"
+        weeklyGoalMinutes = try c.decodeIfPresent(Int.self, forKey: .weeklyGoalMinutes)
+    }
 }
 
 struct FocusSettings: Codable, Equatable {
@@ -186,7 +132,14 @@ enum Storage {
 }
 
 func formatMinutes(_ minutes: Int) -> String {
-    minutes < 60 ? "\(minutes) Min" : String(format: "%d:%02d h", minutes / 60, minutes % 60)
+    minutes < 60 ? "\(minutes) \(L10n.text("minUnit"))" : String(format: "%d:%02d h", minutes / 60, minutes % 60)
+}
+
+/// Longer spans read better as hours: "45 Min", "3,5 h".
+func formatDuration(_ minutes: Double) -> String {
+    if minutes < 60 { return "\(Int(minutes.rounded())) \(L10n.text("minUnit"))" }
+    let hours = minutes / 60
+    return hours.formatted(.number.precision(.fractionLength(hours < 10 ? 1 : 0)).locale(L10n.locale)) + " h"
 }
 
 /// Parses a typed duration such as "45", "45 min", "1h", "1,5 h", "1:30" or "1h 30" into minutes.

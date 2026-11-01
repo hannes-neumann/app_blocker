@@ -8,10 +8,10 @@ enum AIProvider: String, Codable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .automatic: "Automatisch"
+        case .automatic: L10n.text("providerAutomatic")
         case .apple: "Apple Intelligence"
-        case .ollama: "Ollama (lokal)"
-        case .off: "Aus (nur Stichwörter)"
+        case .ollama: L10n.text("providerOllama")
+        case .off: L10n.text("providerOff")
         }
     }
 }
@@ -93,9 +93,11 @@ final class AIEngine {
         switch effectiveProvider {
         case .apple: "Apple Intelligence"
         case .ollama: "Ollama · \(settings.ollamaModel)"
-        default: "Stichwort-Schätzung (keine KI)"
+        default: L10n.text("heuristicActive")
         }
     }
+
+    var isUsingHeuristic: Bool { effectiveProvider != .apple && effectiveProvider != .ollama }
 
     private var effectiveProvider: AIProvider {
         switch settings.provider {

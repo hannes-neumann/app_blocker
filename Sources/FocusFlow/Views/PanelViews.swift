@@ -13,13 +13,13 @@ struct QuickCaptureView: View {
                 Image(systemName: "square.and.pencil")
                     .font(.title2)
                     .foregroundStyle(.secondary)
-                TextField("Was ist dir gerade eingefallen?", text: $text)
+                TextField(L10n.text("captureQuestion"), text: $text)
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .focused($focused)
                     .onSubmit { onSubmit(text) }
             }
-            Text("↩ speichern · esc schließen · wird automatisch zu einem Todo mit Zeitschätzung")
+            Text(L10n.text("captureFooter"))
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -86,9 +86,9 @@ struct BlockedHUDView: View {
             Image(systemName: "hand.raised.fill")
                 .font(.system(size: 36))
                 .foregroundStyle(.orange)
-            Text("\(appName) ist blockiert")
+            Text(L10n.text("appBlockedTitle", appName))
                 .font(.headline)
-            Text("Bleib dran, die nächste Pause kommt bestimmt.")
+            Text(L10n.text("appBlockedText"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

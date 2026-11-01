@@ -1,0 +1,298 @@
+import Foundation
+
+enum AppLanguage: String, Codable, CaseIterable, Identifiable {
+    case german = "de"
+    case english = "en"
+
+    var id: String { rawValue }
+    var title: String { self == .german ? "Deutsch" : "English" }
+}
+
+enum L10n {
+    static var language: AppLanguage = .german
+
+    /// For dates and numbers, so they match the chosen language rather than the system's.
+    static var locale: Locale { Locale(identifier: language == .german ? "de_DE" : "en_US") }
+
+    static func text(_ key: String) -> String {
+        translations[key]?[language] ?? key
+    }
+
+    static func text(_ key: String, _ values: CVarArg...) -> String {
+        String(format: text(key), arguments: values)
+    }
+
+    private static let translations: [String: [AppLanguage: String]] = [
+        "ready": [.german: "Bereit", .english: "Ready"],
+        "focus": [.german: "Fokus", .english: "Focus"],
+        "shortBreak": [.german: "Kurze Pause", .english: "Short break"],
+        "longBreak": [.german: "Lange Pause", .english: "Long break"],
+        "projects": [.german: "Projekte", .english: "Projects"],
+        "todos": [.german: "Todos", .english: "Tasks"],
+        "settings": [.german: "Einstellungen", .english: "Settings"],
+        "timer": [.german: "Timer", .english: "Timer"],
+        "blocking": [.german: "Blockieren", .english: "Blocking"],
+        "general": [.german: "Allgemein", .english: "General"],
+        "ai": [.german: "KI", .english: "AI"],
+        "language": [.german: "Sprache", .english: "Language"],
+        "german": [.german: "Deutsch", .english: "German"],
+        "english": [.german: "Englisch", .english: "English"],
+        "startFocus": [.german: "Fokus starten", .english: "Start focus"],
+        "resume": [.german: "Weiter", .english: "Resume"],
+        "pause": [.german: "Pause", .english: "Pause"],
+        "skip": [.german: "Überspringen", .english: "Skip"],
+        "stop": [.german: "Stopp", .english: "Stop"],
+        "today": [.german: "Heute", .english: "Today"],
+        "todaySummary": [.german: "Heute %d von %d Min", .english: "Today %d of %d min"],
+        "breakSuggestion": [.german: "Vorschlag für die Pause", .english: "Break suggestion"],
+        "statistics": [.german: "Statistik", .english: "Statistics"],
+        "done": [.german: "Erledigt", .english: "Done"],
+        "dashboard": [.german: "Dashboard", .english: "Dashboard"],
+        "quit": [.german: "Beenden", .english: "Quit"],
+        "add": [.german: "Hinzufügen", .english: "Add"],
+        "save": [.german: "Speichern", .english: "Save"],
+        "delete": [.german: "Löschen", .english: "Delete"],
+        "tasks": [.german: "Aufgaben", .english: "Tasks"],
+        "apps": [.german: "Apps", .english: "Apps"],
+        "websites": [.german: "Webseiten", .english: "Websites"],
+        "focusTimeByTask": [.german: "Fokuszeit pro Aufgabe", .english: "Focus time per task"],
+        "sevenDays": [.german: "7 Tage", .english: "7 days"],
+        "thirtyDays": [.german: "30 Tage", .english: "30 days"],
+        "taskSessionsRange": [.german: "Letzte Sitzungen im gewählten Zeitraum", .english: "Sessions in the selected period"],
+        "chooseTaskHint": [.german: "Wähle vor dem Start eines Fokus eine Aufgabe aus.", .english: "Choose a task before starting focus."],
+        "ownAppRule": [.german: "Eigene App-Regel verwenden", .english: "Use custom app rule"],
+        "inheritRule": [.german: "Erbt die Regel des übergeordneten Bereichs.", .english: "Inherits the rule from its parent."],
+        "noBlockedApps": [.german: "Keine Apps blockieren", .english: "Block no apps"],
+        "customDuration": [.german: "Eigene Dauer eingeben…", .english: "Enter custom duration…"]
+        , "pauseFit": [.german: "Passt in deine Pause:", .english: "Fits your break:"]
+        , "noPauseTask": [.german: "Kein offenes Todo passt in diese Pause. Gönn dir eine echte Pause!", .english: "No open task fits this break. Take a real break!"]
+        , "nextSuggestion": [.german: "Anderer Vorschlag", .english: "Another suggestion"]
+        , "upNext": [.german: "Als Nächstes", .english: "Up next"]
+        , "noOpenTasks": [.german: "Keine offenen Todos.", .english: "No open tasks."]
+        , "openTasks": [.german: "Offen (%d)", .english: "Open (%d)"]
+        , "completedTasks": [.german: "Erledigt (%d)", .english: "Completed (%d)"]
+        , "clearCompleted": [.german: "Erledigte löschen", .english: "Delete completed"]
+        , "aboutTotal": [.german: "Zusammen etwa %@", .english: "About %@ total"]
+        , "activeDays": [.german: "an %d von %d Tagen aktiv", .english: "active on %d of %d days"]
+        , "activeNow": [.german: "Gerade aktiv", .english: "Active now"]
+        , "addNote": [.german: "Notiz hinzufügen…", .english: "Add a note…"]
+        , "addWebsite": [.german: "Webseite hinzufügen…", .english: "Add website…"]
+        , "address": [.german: "Adresse", .english: "Address"]
+        , "adjustEstimate": [.german: "Geschätzte Dauer anpassen", .english: "Adjust estimate"]
+        , "aiForTodos": [.german: "KI für Todos", .english: "AI for tasks"]
+        , "aiProviderFooter": [.german: "„Automatisch“ nimmt Apple Intelligence, wenn verfügbar, sonst Ollama. Ohne KI übernimmt FocusFlow die Notiz als Todo und schätzt die Dauer anhand von Stichworten. Angaben wie „30 min“ oder „2h“ in der Notiz werden immer übernommen.", .english: "“Automatic” uses Apple Intelligence when available, otherwise Ollama. Without AI, FocusFlow keeps the note as a task and estimates the duration from keywords. Durations like “30 min” or “2h” in the note are always used."]
+        , "allProjects": [.german: "Alle Projekte", .english: "All projects"]
+        , "allSessions": [.german: "Alle Sessions", .english: "All sessions"]
+        , "allTodos": [.german: "Alle %d Todos", .english: "All %d tasks"]
+        , "appBlockedText": [.german: "Bleib dran, die nächste Pause kommt bestimmt.", .english: "Stay with it, your next break is coming."]
+        , "appBlockedTitle": [.german: "%@ ist blockiert", .english: "%@ is blocked"]
+        , "appleDisabled": [.german: "Apple Intelligence ist in den Systemeinstellungen deaktiviert.", .english: "Apple Intelligence is turned off in System Settings."]
+        , "appleLoading": [.german: "Das Apple-Modell wird noch geladen.", .english: "The Apple model is still loading."]
+        , "appleNeedsMacOS26": [.german: "Benötigt macOS 26 mit Apple Intelligence.", .english: "Requires macOS 26 with Apple Intelligence."]
+        , "appleNotSupported": [.german: "Dieser Mac unterstützt Apple Intelligence nicht.", .english: "This Mac does not support Apple Intelligence."]
+        , "appleUnavailable": [.german: "Apple Intelligence ist nicht verfügbar.", .english: "Apple Intelligence is not available."]
+        , "appsForTask": [.german: "Apps für diese Aufgabe", .english: "Apps for this task"]
+        , "area": [.german: "Bereich", .english: "Section"]
+        , "assign": [.german: "Zuordnen", .english: "Assign"]
+        , "assignSession": [.german: "Session einem Projekt zuordnen", .english: "Assign session to a project"]
+        , "autoStartFocus": [.german: "Nach der Pause automatisch weiterfokussieren", .english: "Start the next focus automatically after a break"]
+        , "available": [.german: "Verfügbar", .english: "Available"]
+        , "avgSession": [.german: "Ø %@ pro Session", .english: "avg. %@ per session"]
+        , "basedOnTasks": [.german: "Aus %d erledigten Aufgaben mit Schätzung und Fokuszeit", .english: "Based on %d finished tasks with an estimate and focus time"]
+        , "blockWebsiteText": [.german: "Gib die Adresse der Webseite ein. Du kannst auch einen Link aus dem Browser einfügen.", .english: "Enter the website's address. You can also paste a link from your browser."]
+        , "blockWebsiteTitle": [.german: "Webseite blockieren", .english: "Block a website"]
+        , "blockWebsites": [.german: "Webseiten blockieren", .english: "Block websites"]
+        , "blockingForProject": [.german: "Blockieren in diesem Projekt", .english: "Blocking in this project"]
+        , "blockingForProjectHint": [.german: "Eigene App-Regel, solange du an diesem Projekt arbeitest", .english: "A custom app rule while you work on this project"]
+        , "blockingSummary": [.german: "Im Fokus blockiert – Apps: %d · Webseiten: %d", .english: "Blocked during focus – apps: %d · websites: %d"]
+        , "blocksDomain": [.german: "Blockiert %@ und www.%@", .english: "Blocks %@ and www.%@"]
+        , "byWeekday": [.german: "Nach Wochentag", .english: "By weekday"]
+        , "cancel": [.german: "Abbrechen", .english: "Cancel"]
+        , "captureFooter": [.german: "↩ speichern · esc schließen · wird automatisch zu einem Todo mit Zeitschätzung", .english: "↩ save · esc close · becomes a task with a time estimate"]
+        , "captureHint": [.german: "Notiere etwas oben oder überall mit %@.", .english: "Note something above or anywhere with %@."]
+        , "captureQuestion": [.german: "Was ist dir gerade eingefallen?", .english: "What just came to mind?"]
+        , "checkAgain": [.german: "Erneut prüfen", .english: "Check again"]
+        , "checkingConnection": [.german: "Verbindung wird geprüft…", .english: "Checking connection…"]
+        , "chooseApp": [.german: "App auswählen…", .english: "Choose app…"]
+        , "chooseTask": [.german: "Aufgabe für diese Session wählen", .english: "Choose a task for this session"]
+        , "clickProjectHint": [.german: "Klick auf ein Projekt öffnet es", .english: "Click a project to open it"]
+        , "color": [.german: "Farbe", .english: "Color"]
+        , "completedAgo": [.german: "erledigt %@", .english: "done %@"]
+        , "completionRate": [.german: "Durchgezogen", .english: "Completed"]
+        , "completionRateDetail": [.german: "Sessions bis zum Ende", .english: "sessions run to the end"]
+        , "create": [.german: "Anlegen", .english: "Create"]
+        , "createFirstProject": [.german: "Erstes Projekt anlegen", .english: "Create your first project"]
+        , "dailyGoal": [.german: "Tagesziel", .english: "Daily goal"]
+        , "day": [.german: "Tag", .english: "day"]
+        , "days": [.german: "Tage", .english: "days"]
+        , "deleteLog": [.german: "Protokoll löschen", .english: "Delete log"]
+        , "deleteProject": [.german: "Projekt löschen", .english: "Delete project"]
+        , "deleteProjectMessage": [.german: "Aufgaben und Sessions bleiben erhalten und sind danach keinem Projekt mehr zugeordnet.", .english: "Tasks and sessions are kept and will no longer belong to a project."]
+        , "deleteProjectTitle": [.german: "„%@“ löschen?", .english: "Delete “%@”?"]
+        , "durationHelp": [.german: "z. B. 25, 45 min, 1h, 1,5h oder 1:30", .english: "e.g. 25, 45 min, 1h, 1.5h or 1:30"]
+        , "durationPlaceholder": [.german: "Dauer, z. B. 25 min oder 1:30", .english: "Duration, e.g. 25 min or 1:30"]
+        , "editProject": [.german: "Projekt bearbeiten", .english: "Edit project"]
+        , "estimateAccuracy": [.german: "Schätzgenauigkeit", .english: "Estimate accuracy"]
+        , "estimateAccuracyHint": [.german: "Echte Fokuszeit im Verhältnis zur Schätzung", .english: "Actual focus time compared to the estimate"]
+        , "estimateGood": [.german: "Deine Schätzungen passen gut.", .english: "Your estimates are about right."]
+        , "estimateNoData": [.german: "Wähle beim Fokus eine Aufgabe und hake sie ab, dann siehst du hier, wie gut die Schätzungen passen.", .english: "Pick a task when you focus and check it off, then you will see how good the estimates are."]
+        , "estimateTooHigh": [.german: "Aufgaben gehen schneller als geschätzt.", .english: "Tasks go faster than estimated."]
+        , "estimateTooLow": [.german: "Aufgaben dauern länger als geschätzt. Plane etwas Puffer ein.", .english: "Tasks take longer than estimated. Plan some buffer."]
+        , "focusFieldHelp": [.german: "Fokuszeit, z. B. 25, 50 min, 1h oder 1:30. Enter startet.", .english: "Focus time, e.g. 25, 50 min, 1h or 1:30. Return starts."]
+        , "focusPerDay": [.german: "Fokuszeit pro Tag", .english: "Focus time per day"]
+        , "focusSession": [.german: "Fokus-Session", .english: "Focus session"]
+        , "focusThisWeek": [.german: "Fokus diese Woche", .english: "Focus this week"]
+        , "focusTime": [.german: "Fokuszeit", .english: "Focus time"]
+        , "focusedOfEstimate": [.german: "%@ von %@ fokussiert", .english: "%@ of %@ focused"]
+        , "focusedOnly": [.german: "%@ fokussiert", .english: "%@ focused"]
+        , "goal": [.german: "Ziel", .english: "Goal"]
+        , "goalDaysDetail": [.german: "Tage mit mindestens %d Min", .english: "days with at least %d min"]
+        , "goalDaysThisWeek": [.german: "Tagesziel %dx erreicht", .english: "daily goal reached %d×"]
+        , "goalReached": [.german: "Tagesziel erreicht", .english: "Daily goal reached"]
+        , "greetingDay": [.german: "Hallo", .english: "Hello"]
+        , "greetingEvening": [.german: "Guten Abend", .english: "Good evening"]
+        , "greetingMorning": [.german: "Guten Morgen", .english: "Good morning"]
+        , "helperCancelledError": [.german: "Webseiten werden nicht blockiert (Installation des Helfers abgebrochen).", .english: "Websites are not blocked (helper installation was cancelled)."]
+        , "helperFooter": [.german: "Ein kleiner Systemdienst, der /etc/hosts bearbeiten darf. Du gibst dein Admin-Passwort nur einmal bei der Installation ein. Er sperrt nur, solange FocusFlow läuft und im Fokus ist.", .english: "A small system service allowed to edit /etc/hosts. You enter your admin password only once when installing. It only blocks while FocusFlow is running and in focus."]
+        , "helperMissingError": [.german: "Webseiten werden nicht blockiert, der Helfer ist nicht installiert.", .english: "Websites are not blocked because the helper is not installed."]
+        , "heuristicActive": [.german: "Stichwort-Schätzung (keine KI)", .english: "Keyword estimate (no AI)"]
+        , "hourLabel": [.german: "%d Uhr", .english: "%d:00"]
+        , "hourRange": [.german: "%d–%d Uhr", .english: "%d:00–%d:00"]
+        , "icon": [.german: "Symbol", .english: "Icon"]
+        , "inPeriod": [.german: "in den letzten %d Tagen", .english: "in the last %d days"]
+        , "insightBestHours": [.german: "Am meisten fokussierst du zwischen %d und %d Uhr. Leg wichtige Aufgaben in diese Zeit.", .english: "You focus most between %d:00 and %d:00. Put important tasks there."]
+        , "insightBestWeekday": [.german: "Dein stärkster Tag ist der %@.", .english: "Your strongest day is %@."]
+        , "insightCompletionHigh": [.german: "Du ziehst %d %% deiner Sessions bis zum Ende durch.", .english: "You finish %d%% of your sessions."]
+        , "insightCompletionLow": [.german: "Nur %d %% deiner Sessions laufen bis zum Ende. Probier eine kürzere Fokuszeit.", .english: "Only %d%% of your sessions run to the end. Try a shorter focus time."]
+        , "insightEstimateLong": [.german: "Aufgaben dauern im Schnitt %@× so lange wie geschätzt.", .english: "Tasks take %@× as long as estimated on average."]
+        , "insightEstimateShort": [.german: "Aufgaben brauchen im Schnitt nur %@× der geschätzten Zeit.", .english: "Tasks need only %@× the estimated time on average."]
+        , "insightTopProject": [.german: "%@ bekommt %d %% deiner Fokuszeit.", .english: "%@ gets %d%% of your focus time."]
+        , "insightTrendDown": [.german: "%d %% weniger Fokus als in den %d Tagen davor.", .english: "%d%% less focus than in the %d days before."]
+        , "insightTrendUp": [.german: "%d %% mehr Fokus als in den %d Tagen davor.", .english: "%d%% more focus than in the %d days before."]
+        , "insightUnassigned": [.german: "%d %% deiner Fokuszeit hat kein Projekt. Ordne Sessions unten zu, dann werden die Projektzahlen genauer.", .english: "%d%% of your focus time has no project. Assign sessions below to make project numbers accurate."]
+        , "insights": [.german: "Insights", .english: "Insights"]
+        , "insightsEmpty": [.german: "Sobald du ein paar Sessions hast, erscheinen hier Auffälligkeiten.", .english: "Once you have a few sessions, observations show up here."]
+        , "insightsSubtitle": [.german: "Wie, wann und woran du fokussierst", .english: "How, when and on what you focus"]
+        , "install": [.german: "Installieren…", .english: "Install…"]
+        , "installHelperOnce": [.german: "Helfer installieren (einmalig)", .english: "Install helper (once)"]
+        , "installed": [.german: "Installiert", .english: "Installed"]
+        , "invalidDomain": [.german: "Das ist keine gültige Adresse, z. B. netflix.com", .english: "That is not a valid address, e.g. netflix.com"]
+        , "last30Days": [.german: "Letzte 30 Tage", .english: "Last 30 days"]
+        , "lastPeriod": [.german: "Letzte %d Tage", .english: "Last %d days"]
+        , "lastSession": [.german: "Gerade beendete Session", .english: "Session that just ended"]
+        , "lift": [.german: "Aufheben", .english: "Remove"]
+        , "loadFailed": [.german: "Laden fehlgeschlagen: %@", .english: "Download failed: %@"]
+        , "loadModel": [.german: "Modell laden", .english: "Download model"]
+        , "log": [.german: "Protokoll", .english: "Log"]
+        , "logFooter": [.german: "Speichert jede Bedienung mit Zeitpunkt auf diesem Mac, damit wir die App anhand echter Nutzung verbessern können. Nichts verlässt deinen Mac. Texte wie Notizen und Todo-Titel stehen getrennt im Feld „content“, damit sie beim späteren Teilen weggelassen werden können.", .english: "Saves every interaction with a timestamp on this Mac, so the app can be improved from real usage. Nothing leaves your Mac. Text such as notes and task titles is kept separately in the “content” field, so it can be left out if data is ever shared."]
+        , "logUsage": [.german: "Nutzung protokollieren", .english: "Log usage"]
+        , "longBreakAfter": [.german: "Lange Pause nach", .english: "Long break after"]
+        , "minFocus": [.german: "Min Fokus", .english: "min focus"]
+        , "minUnit": [.german: "Min", .english: "min"]
+        , "minutesByHour": [.german: "Minuten nach Tageszeit", .english: "Minutes by time of day"]
+        , "minutesByProjectGoal": [.german: "Minuten nach Projekt · Ziel %d Min", .english: "Minutes by project · goal %d min"]
+        , "minutesLeft": [.german: "noch %d Min bis zum Ziel", .english: "%d min left to your goal"]
+        , "minutesPerDay": [.german: "Minuten pro Tag", .english: "Minutes per day"]
+        , "minutesPerDayByProject": [.german: "Minuten pro Tag nach Projekt", .english: "Minutes per day by project"]
+        , "minutesPerWeekday": [.german: "Minuten pro Wochentag", .english: "Minutes per weekday"]
+        , "model": [.german: "Modell", .english: "Model"]
+        , "modelLoading": [.german: "%@ wird geladen… %d %%", .english: "Downloading %@… %d%%"]
+        , "modelNotLoaded": [.german: "%@ ist nicht geladen", .english: "%@ is not downloaded"]
+        , "moveToProject": [.german: "In ein Projekt verschieben", .english: "Move to a project"]
+        , "newProject": [.german: "Neues Projekt", .english: "New project"]
+        , "newTaskPlaceholder": [.german: "Neue Aufgabe, z. B. Kapitel 2 zusammenfassen", .english: "New task, e.g. Summarize chapter 2"]
+        , "ninetyDays": [.german: "90 Tage", .english: "90 days"]
+        , "noAppsSelected": [.german: "Noch keine Apps ausgewählt.", .english: "No apps selected yet."]
+        , "noDataText": [.german: "Starte eine Fokus-Session, dann füllt sich diese Seite.", .english: "Start a focus session and this page fills up."]
+        , "noDataTitle": [.german: "Noch keine Fokuszeit in diesem Zeitraum", .english: "No focus time in this period yet"]
+        , "noFocusYetWeek": [.german: "Diese Woche noch keine Fokuszeit. Wähle oben ein Projekt und leg los.", .english: "No focus time this week yet. Pick a project above and get started."]
+        , "noProject": [.german: "Kein Projekt", .english: "No project"]
+        , "noProjectFocusYet": [.german: "Noch keine Sessions in diesem Projekt.", .english: "No sessions in this project yet."]
+        , "noProjectsText": [.german: "Projekte bündeln Aufgaben und Fokuszeit. Wähle vor dem Start ein Projekt, dann siehst du, wohin deine Zeit geht.", .english: "Projects group tasks and focus time. Pick a project before you start and you will see where your time goes."]
+        , "noProjectsTitle": [.german: "Noch keine Projekte", .english: "No projects yet"]
+        , "noSessionsToday": [.german: "Heute noch keine Session.", .english: "No session today yet."]
+        , "noSessionsYet": [.german: "noch keine Sessions", .english: "no sessions yet"]
+        , "noTask": [.german: "Keine Aufgabe", .english: "No task"]
+        , "noTasksInProject": [.german: "Noch keine Aufgaben in diesem Projekt.", .english: "No tasks in this project yet."]
+        , "noWebsitesSelected": [.german: "Noch keine Webseiten ausgewählt.", .english: "No websites selected yet."]
+        , "noWeeklyGoal": [.german: "kein Wochenziel", .english: "no weekly goal"]
+        , "notInstalled": [.german: "Nicht installiert", .english: "Not installed"]
+        , "noteFieldPlaceholder": [.german: "Notiz hinzufügen, wird zu Todos mit Zeitschätzung…", .english: "Add a note, it becomes tasks with time estimates…"]
+        , "notePrefix": [.german: "Notiz: %@", .english: "Note: %@"]
+        , "notedAgo": [.german: "notiert %@", .english: "noted %@"]
+        , "nothingDoneYet": [.german: "Noch nichts erledigt", .english: "Nothing done yet"]
+        , "ofEstimate": [.german: "der Schätzung", .english: "of the estimate"]
+        , "ofGoal": [.german: "vom Ziel", .english: "of goal"]
+        , "ofWeeklyGoal": [.german: "von %@ Wochenziel", .english: "of %@ weekly goal"]
+        , "ollamaAutostart": [.german: "Mit FocusFlow starten und beenden", .english: "Start and stop with FocusFlow"]
+        , "ollamaFooter": [.german: "Ollama führt offene Sprachmodelle direkt auf deinem Mac aus, deine Notizen verlassen ihn nicht. Installieren mit „brew install ollama“. FocusFlow startet Ollama beim Öffnen und beendet es beim Schließen wieder, außer es lief schon vorher.", .english: "Ollama runs open language models right on your Mac, so your notes never leave it. Install with “brew install ollama”. FocusFlow starts Ollama when it opens and stops it when it quits, unless it was already running."]
+        , "ollamaNotInstalled": [.german: "Ollama ist nicht installiert", .english: "Ollama is not installed"]
+        , "ollamaNotRunning": [.german: "Ollama läuft nicht", .english: "Ollama is not running"]
+        , "openTasksOne": [.german: "%d offene Aufgabe", .english: "%d open task"]
+        , "sessionsTodayOne": [.german: "%d Session heute", .english: "%d session today"]
+        , "openTasksCount": [.german: "%d offene Aufgaben", .english: "%d open tasks"]
+        , "otherProjects": [.german: "Weitere Projekte", .english: "Other projects"]
+        , "overview": [.german: "Übersicht", .english: "Overview"]
+        , "perActiveDay": [.german: "Pro aktivem Tag", .english: "Per active day"]
+        , "period": [.german: "Zeitraum", .english: "Period"]
+        , "project": [.german: "Projekt", .english: "Project"]
+        , "projectNamePlaceholder": [.german: "Name, z. B. Masterarbeit", .english: "Name, e.g. Thesis"]
+        , "projectShare": [.german: "Zeit nach Projekt", .english: "Time by project"]
+        , "projectsSubtitle": [.german: "Wohin deine Fokuszeit geht", .english: "Where your focus time goes"]
+        , "providerAutomatic": [.german: "Automatisch", .english: "Automatic"]
+        , "providerOff": [.german: "Aus (nur Stichwörter)", .english: "Off (keywords only)"]
+        , "providerOllama": [.german: "Ollama (lokal)", .english: "Ollama (local)"]
+        , "quickNote": [.german: "Schnellnotiz", .english: "Quick note"]
+        , "quickNoteFooter": [.german: "Öffnet überall ein kleines Textfeld. Deine Notiz wird zu einem konkreten Todo mit geschätzter Dauer, das dir in einer passenden Pause vorgeschlagen wird. Mit dem Timer-Kürzel startest du überall einen Fokus mit eigener Dauer.", .english: "Opens a small text field anywhere. Your note becomes a concrete task with an estimated duration, suggested to you in a fitting break. The timer shortcut starts a focus with your own duration from anywhere."]
+        , "quickNoteShortcut": [.german: "Schnellnotiz: %@", .english: "Quick note: %@"]
+        , "readyStatus": [.german: "Bereit", .english: "Ready"]
+        , "recentSessions": [.german: "Letzte Sessions", .english: "Recent sessions"]
+        , "refinedByAI": [.german: "Von der KI formuliert und geschätzt", .english: "Written and estimated by AI"]
+        , "remove": [.german: "Entfernen", .english: "Remove"]
+        , "roundOf": [.german: "Runde %d von %d", .english: "Round %d of %d"]
+        , "rounds": [.german: "Runden", .english: "rounds"]
+        , "runningApp": [.german: "Laufende App", .english: "Running app"]
+        , "sessionEndedEarly": [.german: "Vorzeitig beendet", .english: "Ended early"]
+        , "sessions": [.german: "Sessions", .english: "Sessions"]
+        , "sessionsAssignHint": [.german: "Klick auf das Projekt einer Session, um es zu ändern", .english: "Click a session's project to change it"]
+        , "sessionsDetail": [.german: "Ø %@ · %d %% durchgezogen", .english: "avg. %@ · %d%% completed"]
+        , "sessionsToday": [.german: "%d Sessions heute", .english: "%d sessions today"]
+        , "shortcut": [.german: "Tastenkürzel", .english: "Shortcut"]
+        , "show": [.german: "Anzeigen", .english: "Show"]
+        , "showAll": [.german: "Alle ansehen", .english: "See all"]
+        , "showAllCount": [.german: "Alle %d zeigen", .english: "Show all %d"]
+        , "showInFinder": [.german: "Im Finder zeigen", .english: "Show in Finder"]
+        , "showLess": [.german: "Weniger zeigen", .english: "Show less"]
+        , "sinceDate": [.german: "seit %@", .english: "since %@"]
+        , "staleBlockActive": [.german: "Alte Webseiten-Sperre aktiv", .english: "Old website block active"]
+        , "startFocusForProject": [.german: "Fokus starten", .english: "Start focus"]
+        , "startFocusOnTask": [.german: "Fokus auf diese Aufgabe starten", .english: "Start focus on this task"]
+        , "startStreak": [.german: "Starte heute deine Serie", .english: "Start your streak today"]
+        , "stored": [.german: "Gespeichert", .english: "Stored"]
+        , "streak": [.german: "Serie", .english: "Streak"]
+        , "streakDays": [.german: "Serie: %d Tage in Folge", .english: "Streak: %d days in a row"]
+        , "streakOneDay": [.german: "Serie: %d Tag", .english: "Streak: %d day"]
+        , "task": [.german: "Aufgabe", .english: "Task"]
+        , "thisWeek": [.german: "Diese Woche", .english: "This week"]
+        , "timerEntryFooter": [.german: "↩ starten · esc schließen · Eingaben wie 25 min, 1h oder 1:30", .english: "↩ start · esc close · input like 25 min, 1h or 1:30"]
+        , "timerShortcut": [.german: "Timer mit eigener Dauer", .english: "Timer with custom duration"]
+        , "title": [.german: "Titel", .english: "Title"]
+        , "todaysSessions": [.german: "Heutige Sessions", .english: "Today's sessions"]
+        , "todosDone": [.german: "Todos erledigt", .english: "Tasks done"]
+        , "total": [.german: "Gesamt", .english: "Total"]
+        , "trendDown": [.german: "−%d %% zum Zeitraum davor", .english: "−%d%% vs. previous period"]
+        , "trendUp": [.german: "+%d %% zum Zeitraum davor", .english: "+%d%% vs. previous period"]
+        , "unassignedHint": [.german: "%d ohne Projekt, klick zum Zuordnen", .english: "%d without a project, click to assign"]
+        , "unassignedMinutesHint": [.german: "%@ ohne Projekt, klick auf „Zuordnen“", .english: "%@ without a project, click “Assign”"]
+        , "vsLastWeekNone": [.german: "noch kein Vergleich", .english: "no comparison yet"]
+        , "websiteHelper": [.german: "Webseiten-Helfer", .english: "Website helper"]
+        , "websitesFooter": [.german: "Webseiten werden systemweit über /etc/hosts blockiert. Bereits geöffnete Tabs können bis zum Neuladen weiterlaufen.", .english: "Websites are blocked system-wide via /etc/hosts. Tabs that are already open may keep working until reloaded."]
+        , "weeklyGoal": [.german: "Wochenziel (optional)", .english: "Weekly goal (optional)"]
+        , "weeklyGoalHint": [.german: "Fokuszeit pro Woche", .english: "focus time per week"]
+        , "weeklyGoalPlaceholder": [.german: "z. B. 5h", .english: "e.g. 5h"]
+        , "weeklyGoalProgress": [.german: "%d von %d Min Wochenziel", .english: "%d of %d min weekly goal"]
+        , "whatStoodOut": [.german: "Was auffällt", .english: "What stands out"]
+        , "whenYouWork": [.german: "Wann du arbeitest", .english: "When you work"]
+        , "workingOn": [.german: "Woran arbeitest du?", .english: "What are you working on?"]
+    ]
+}

@@ -13,9 +13,9 @@ passenden Pause vorgeschlagen werden.
 - **Timer-Shortcut** mit `⌃⌥T`: öffnet ein Eingabefenster für eine eigene Fokusdauer. Mit Enter oder einer Vorauswahl startet der Timer direkt.
 - **KI-Aufbereitung**: Ein Sprachmodell auf deinem Mac (Apple Foundation Model oder ein Ollama-Modell) macht aus der Notiz ein oder mehrere konkrete Todos mit geschätzter Dauer.
 - **Pausenvorschlag**: Zu Beginn jeder Pause schlägt FocusFlow das längste offene Todo vor, das noch in die Pause passt.
-- **Dashboard**: ein eigenes Fenster mit Timer, allen Todos (Titel bearbeiten, Dauer anpassen, erledigen, löschen), Statistik und Einstellungen. Öffnest du es über „Dashboard“ im Menü.
-- **Projekte und Aufgaben**: Projekte mit konkreten Aufgaben anlegen, pro Projekt oder Aufgabe eigene App-Sperrlisten hinterlegen und vor dem Fokus die Aufgabe auswählen. Regeln der Aufgabe überschreiben Projektregeln, ansonsten wird die globale Regel verwendet.
-- **Statistik**: Fokuszeit pro Tag mit Tagesziel, Serie, durchgezogene Sessions, erledigte Todos, Fokuszeit nach Tageszeit und Fokuszeit pro Aufgabe, für 7 oder 30 Tage. Im Menü steht eine Kurzübersicht für heute.
+- **Dashboard**: ein eigenes Fenster mit Übersicht (Timer mit Projektwahl, Tagesziel, Wochenzahlen, Wochendiagramm nach Projekt, Insights, heutige Sessions, nächste Todos), Projekten, Todos, Insights und Einstellungen. Öffnest du es über „Dashboard“ im Menü.
+- **Projekte**: Projekte mit Farbe, Symbol und optionalem Wochenziel anlegen (Seitenleiste, Übersicht oder Menü). Vor dem Start wählst du ein Projekt und optional eine Aufgabe, die Session zählt dann für dieses Projekt. Sessions lassen sich nachträglich umhängen, z. B. in der Pause oder in der Session-Liste. Jede Projektseite zeigt Fokuszeit, Verlauf, Tageszeiten, Aufgaben mit Fokuszeit gegen Schätzung und eigene App-Sperrlisten. Regeln der Aufgabe überschreiben Projektregeln, ansonsten gilt die globale Regel.
+- **Insights**: Fokuszeit pro Tag nach Projekt mit Tagesziel, Trend zum Zeitraum davor, Zeit nach Projekt, Tageszeiten, Wochentage, Schätzgenauigkeit, Fokuszeit pro Aufgabe und alle Sessions, für 7, 30 oder 90 Tage, dazu automatisch formulierte Auffälligkeiten. Im Menü steht eine Kurzübersicht für heute.
 
 ## Bauen und starten
 
@@ -40,8 +40,9 @@ Für die Entwicklung reicht auch `swift build`. Das fertige `.app`-Bundle brauch
 | Webseiten-Blocker | `DomainBlocker.swift` (siehe unten) |
 | Tastenkürzel | `HotKey.swift` über die Carbon Hot-Key-API (braucht keine Bedienungshilfen-Freigabe) |
 | Todos & Vorschlag | `TodoStore.swift` |
-| Statistik | `StatsStore.swift`, `Views/StatsView.swift` (Swift Charts) |
-| Dashboard | `Views/DashboardView.swift` |
+| Insights | `StatsStore.swift`, `Insights.swift` (Auswertungen), `Views/StatsView.swift` (Swift Charts) |
+| Dashboard | `Views/DashboardView.swift`, `Views/ProjectsView.swift`, `Views/DashboardComponents.swift`, `ProjectStyle.swift` (Projektfarben) |
+| Sprachen | `Localization.swift` (alle Texte auf Deutsch und Englisch) |
 | KI | `AIEngine.swift` (Auswahl des Modells), `OllamaClient.swift`, `TodoRefiner.swift` (Anweisungen, Stichwort-Schätzung) |
 | Protokoll | `Analytics.swift` (Events, `AnalyticsSink`, lokale Datei) |
 

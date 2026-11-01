@@ -26,17 +26,17 @@ enum TodoRefiner {
             case .available:
                 return .available
             case .unavailable(.deviceNotEligible):
-                return .unavailable("Dieser Mac unterstützt Apple Intelligence nicht.")
+                return .unavailable(L10n.text("appleNotSupported"))
             case .unavailable(.appleIntelligenceNotEnabled):
-                return .unavailable("Apple Intelligence ist in den Systemeinstellungen deaktiviert.")
+                return .unavailable(L10n.text("appleDisabled"))
             case .unavailable(.modelNotReady):
-                return .unavailable("Das Apple-Modell wird noch geladen.")
+                return .unavailable(L10n.text("appleLoading"))
             @unknown default:
-                return .unavailable("Apple Intelligence ist nicht verfügbar.")
+                return .unavailable(L10n.text("appleUnavailable"))
             }
         }
         #endif
-        return .unavailable("Benötigt macOS 26 mit Apple Intelligence.")
+        return .unavailable(L10n.text("appleNeedsMacOS26"))
     }
 
     static let instructions = """

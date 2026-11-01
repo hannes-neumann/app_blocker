@@ -8,7 +8,7 @@ struct SettingsView: View {
     var body: some View {
         @Bindable var state = state
         VStack(spacing: 0) {
-            Picker("Bereich", selection: $tab) {
+            Picker(L10n.text("area"), selection: $tab) {
                 Label(L10n.text("timer"), systemImage: "timer").tag(0)
                 Label(L10n.text("blocking"), systemImage: "hand.raised").tag(1)
                 Label(L10n.text("ai"), systemImage: "sparkles").tag(3)
@@ -37,12 +37,12 @@ private struct TimerSettingsView: View {
 
     var body: some View {
         Form {
-            NumberField(title: "Fokus", value: $settings.focusMinutes, range: 1...180)
-            NumberField(title: "Kurze Pause", value: $settings.shortBreakMinutes, range: 1...60)
-            NumberField(title: "Lange Pause", value: $settings.longBreakMinutes, range: 1...120)
-            NumberField(title: "Lange Pause nach", value: $settings.sessionsUntilLongBreak, range: 1...12, unit: "Runden")
-            Toggle("Nach der Pause automatisch weiterfokussieren", isOn: $settings.autoStartFocus)
-            NumberField(title: "Tagesziel", value: $settings.dailyGoalMinutes, range: 5...600, step: 25, unit: "Min Fokus")
+            NumberField(title: L10n.text("focus"), value: $settings.focusMinutes, range: 1...180)
+            NumberField(title: L10n.text("shortBreak"), value: $settings.shortBreakMinutes, range: 1...60)
+            NumberField(title: L10n.text("longBreak"), value: $settings.longBreakMinutes, range: 1...120)
+            NumberField(title: L10n.text("longBreakAfter"), value: $settings.sessionsUntilLongBreak, range: 1...12, unit: L10n.text("rounds"))
+            Toggle(L10n.text("autoStartFocus"), isOn: $settings.autoStartFocus)
+            NumberField(title: L10n.text("dailyGoal"), value: $settings.dailyGoalMinutes, range: 5...600, step: 25, unit: L10n.text("minFocus"))
         }
         .formStyle(.grouped)
     }
@@ -55,9 +55,9 @@ private struct BlockingSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Apps") {
+            Section(L10n.text("apps")) {
                 if settings.blockedApps.isEmpty {
-                    Text("Noch keine Apps ausgewählt.").foregroundStyle(.secondary)
+                    Text(L10n.text("noAppsSelected")).foregroundStyle(.secondary)
                 }
                 ForEach(settings.blockedApps) { app in
                     HStack {
@@ -71,8 +71,8 @@ private struct BlockingSettingsView: View {
                     }
                 }
                 HStack {
-                    Button("App auswählen…", action: chooseApps)
-                    Menu("Laufende App") {
+                    Button(L10n.text("chooseApp"), action: chooseApps)
+                    Menu(L10n.text("runningApp")) {
                         ForEach(runningApps, id: \.bundleID) { app in
                             Button(app.name) { add(app) }
                         }
@@ -82,7 +82,7 @@ private struct BlockingSettingsView: View {
             }
 
             Section {
-                Toggle("Webseiten blockieren", isOn: $settings.blockDomains)
+                Toggle(L10n.text("blockWebsites"), isOn: $settings.blockDomains)
                 ForEach(settings.blockedDomains, id: \.self) { domain in
                     HStack {
                         Text(domain)
@@ -94,16 +94,16 @@ private struct BlockingSettingsView: View {
                     }
                 }
                 if settings.blockedDomains.isEmpty {
-                    Text("Noch keine Webseiten ausgewählt.").foregroundStyle(.secondary)
+                    Text(L10n.text("noWebsitesSelected")).foregroundStyle(.secondary)
                 }
-                Button("Webseite hinzufügen…", systemImage: "plus") {
+                Button(L10n.text("addWebsite"), systemImage: "plus") {
                     addingDomain = true
                     Analytics.track(.addDomainOpened)
                 }
             } header: {
-                Text("Webseiten")
+                Text(L10n.text("websites"))
             } footer: {
-                Text("Webseiten werden systemweit über /etc/hosts blockiert. Bereits geöffnete Tabs können bis zum Neuladen weiterlaufen.")
+                Text(L10n.text("websitesFooter"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -111,19 +111,19 @@ private struct BlockingSettingsView: View {
             Section {
                 HStack {
                     if state.isHelperInstalled {
-                        Label("Installiert", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        Label(L10n.text("installed"), systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                         Spacer()
-                        Button("Entfernen") { state.uninstallHelper() }
+                        Button(L10n.text("remove")) { state.uninstallHelper() }
                     } else {
-                        Label("Nicht installiert", systemImage: "xmark.circle").foregroundStyle(.secondary)
+                        Label(L10n.text("notInstalled"), systemImage: "xmark.circle").foregroundStyle(.secondary)
                         Spacer()
-                        Button("Installieren…") { state.installHelper() }
+                        Button(L10n.text("install")) { state.installHelper() }
                     }
                 }
             } header: {
-                Text("Webseiten-Helfer")
+                Text(L10n.text("websiteHelper"))
             } footer: {
-                Text("Ein kleiner Systemdienst, der /etc/hosts bearbeiten darf. Du gibst dein Admin-Passwort nur einmal bei der Installation ein. Er sperrt nur, solange FocusFlow läuft und im Fokus ist.")
+                Text(L10n.text("helperFooter"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -179,8 +179,8 @@ private struct AddDomainSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Webseite blockieren").font(.headline)
-            Text("Gib die Adresse der Webseite ein. Du kannst auch einen Link aus dem Browser einfügen.")
+            Text(L10n.text("blockWebsiteTitle")).font(.headline)
+            Text(L10n.text("blockWebsiteText"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -195,10 +195,10 @@ private struct AddDomainSheet: View {
             }
             Group {
                 if let domain {
-                    Label("Blockiert \(domain) und www.\(domain)", systemImage: "checkmark.circle.fill")
+                    Label(L10n.text("blocksDomain", domain, domain), systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                 } else if showError {
-                    Label("Das ist keine gültige Adresse, z. B. netflix.com", systemImage: "exclamationmark.triangle.fill")
+                    Label(L10n.text("invalidDomain"), systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
                 } else {
                     Text(" ")
@@ -207,12 +207,12 @@ private struct AddDomainSheet: View {
             .font(.caption)
             HStack {
                 Spacer()
-                Button("Abbrechen", role: .cancel) {
+                Button(L10n.text("cancel"), role: .cancel) {
                     Analytics.track(.addDomainCancelled, ["had_text": .bool(!url.isEmpty)])
                     dismiss()
                 }
                     .keyboardShortcut(.cancelAction)
-                Button("Hinzufügen", action: submit)
+                Button(L10n.text("add"), action: submit)
                     .keyboardShortcut(.defaultAction)
                     .disabled(url.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -265,34 +265,35 @@ private struct GeneralSettingsView: View {
                     }
                 }
             }
-            Section("Schnellnotiz") {
-                LabeledContent("Tastenkürzel", value: AppState.shortcutDescription)
-                Text("Öffnet überall ein kleines Textfeld. Deine Notiz wird zu einem konkreten Todo mit geschätzter Dauer, das dir in einer passenden Pause vorgeschlagen wird.")
+            Section(L10n.text("quickNote")) {
+                LabeledContent(L10n.text("shortcut"), value: AppState.shortcutDescription)
+                LabeledContent(L10n.text("timerShortcut"), value: AppState.timerShortcutDescription)
+                Text(L10n.text("quickNoteFooter"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
-                Toggle("Nutzung protokollieren", isOn: $loggingEnabled)
+                Toggle(L10n.text("logUsage"), isOn: $loggingEnabled)
                     .onChange(of: loggingEnabled) {
                         // Log the switch itself while logging is still on.
                         if !loggingEnabled { Analytics.track(.settingChanged, ["setting": "logging.enabled", "old_value": true, "new_value": false]) }
                         Analytics.settings.enabled = loggingEnabled
                         if loggingEnabled { Analytics.track(.settingChanged, ["setting": "logging.enabled", "old_value": false, "new_value": true]) }
                     }
-                LabeledContent("Gespeichert", value: ByteCountFormatter.string(fromByteCount: logSize, countStyle: .file))
+                LabeledContent(L10n.text("stored"), value: ByteCountFormatter.string(fromByteCount: logSize, countStyle: .file))
                 HStack {
-                    Button("Im Finder zeigen") { NSWorkspace.shared.open(LocalFileSink.directory) }
-                    Button("Protokoll löschen", role: .destructive) {
+                    Button(L10n.text("showInFinder")) { NSWorkspace.shared.open(LocalFileSink.directory) }
+                    Button(L10n.text("deleteLog"), role: .destructive) {
                         Analytics.flush()
                         LocalFileSink.deleteAll()
                         logSize = LocalFileSink.totalSize
                     }
                 }
             } header: {
-                Text("Protokoll")
+                Text(L10n.text("log"))
             } footer: {
-                Text("Speichert jede Bedienung mit Zeitpunkt auf diesem Mac, damit wir die App anhand echter Nutzung verbessern können. Nichts verlässt deinen Mac. Texte wie Notizen und Todo-Titel stehen getrennt im Feld „content“, damit sie beim späteren Teilen weggelassen werden können.")
+                Text(L10n.text("logFooter"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

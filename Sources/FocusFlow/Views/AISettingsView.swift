@@ -6,27 +6,27 @@ struct AISettingsView: View {
     var body: some View {
         Form {
             Section {
-                Picker("KI für Todos", selection: $ai.settings.provider) {
+                Picker(L10n.text("aiForTodos"), selection: $ai.settings.provider) {
                     ForEach(AIProvider.allCases) { Text($0.title).tag($0) }
                 }
-                LabeledContent("Gerade aktiv") {
-                    Label(ai.activeDescription, systemImage: ai.activeDescription.hasPrefix("Stichwort") ? "text.magnifyingglass" : "sparkles")
+                LabeledContent(L10n.text("activeNow")) {
+                    Label(ai.activeDescription, systemImage: ai.isUsingHeuristic ? "text.magnifyingglass" : "sparkles")
                 }
             } footer: {
-                Text("„Automatisch“ nimmt Apple Intelligence, wenn verfügbar, sonst Ollama. Ohne KI übernimmt FocusFlow die Notiz als Todo und schätzt die Dauer anhand von Stichworten. Angaben wie „30 min“ oder „2h“ in der Notiz werden immer übernommen.")
+                Text(L10n.text("aiProviderFooter"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
-                Toggle("Mit FocusFlow starten und beenden", isOn: $ai.settings.startOllama)
-                TextField("Adresse", text: $ai.settings.ollamaURL)
+                Toggle(L10n.text("ollamaAutostart"), isOn: $ai.settings.startOllama)
+                TextField(L10n.text("address"), text: $ai.settings.ollamaURL)
                 modelRow
                 statusRow
             } header: {
                 Text("Ollama")
             } footer: {
-                Text("Ollama führt offene Sprachmodelle direkt auf deinem Mac aus, deine Notizen verlassen ihn nicht. Installieren mit „brew install ollama“. FocusFlow startet Ollama beim Öffnen und beendet es beim Schließen wieder, außer es lief schon vorher.")
+                Text(L10n.text("ollamaFooter"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -34,7 +34,7 @@ struct AISettingsView: View {
             Section("Apple Intelligence") {
                 switch ai.appleStatus {
                 case .available:
-                    Label("Verfügbar", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    Label(L10n.text("available"), systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                 case .unavailable(let reason):
                     Label(reason, systemImage: "xmark.circle").foregroundStyle(.secondary)
                 }
@@ -48,9 +48,9 @@ struct AISettingsView: View {
     private var modelRow: some View {
         let installed = ai.ollamaStatus.installed
         if installed.isEmpty {
-            TextField("Modell", text: $ai.settings.ollamaModel)
+            TextField(L10n.text("model"), text: $ai.settings.ollamaModel)
         } else {
-            Picker("Modell", selection: $ai.settings.ollamaModel) {
+            Picker(L10n.text("model"), selection: $ai.settings.ollamaModel) {
                 // Keep a typed model that is not downloaded yet selectable.
                 ForEach(installed.contains(ai.settings.ollamaModel) ? installed : [ai.settings.ollamaModel] + installed, id: \.self) {
                     Text($0).tag($0)
@@ -65,30 +65,30 @@ struct AISettingsView: View {
             switch ai.ollamaStatus {
             case .unknown, .checking:
                 ProgressView().controlSize(.small)
-                Text("Verbindung wird geprüft…").foregroundStyle(.secondary)
+                Text(L10n.text("checkingConnection")).foregroundStyle(.secondary)
             case .notRunning:
-                Label(AIEngine.ollamaExecutable == nil ? "Ollama ist nicht installiert" : "Ollama läuft nicht",
+                Label(L10n.text(AIEngine.ollamaExecutable == nil ? "ollamaNotInstalled" : "ollamaNotRunning"),
                       systemImage: "xmark.circle").foregroundStyle(.secondary)
             case .modelMissing:
-                Label("\(ai.settings.ollamaModel) ist nicht geladen", systemImage: "arrow.down.circle").foregroundStyle(.orange)
+                Label(L10n.text("modelNotLoaded", ai.settings.ollamaModel), systemImage: "arrow.down.circle").foregroundStyle(.orange)
                 Spacer()
-                Button("Modell laden") { ai.pullModel() }
+                Button(L10n.text("loadModel")) { ai.pullModel() }
             case .pulling:
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(ai.settings.ollamaModel) wird geladen… \(Int(ai.pullProgress * 100)) %").foregroundStyle(.secondary)
+                    Text(L10n.text("modelLoading", ai.settings.ollamaModel, Int(ai.pullProgress * 100))).foregroundStyle(.secondary)
                     ProgressView(value: ai.pullProgress)
                 }
             case .ready:
-                Label("Bereit", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                Label(L10n.text("readyStatus"), systemImage: "checkmark.circle.fill").foregroundStyle(.green)
             }
             if ai.ollamaStatus != .modelMissing(installed: ai.ollamaStatus.installed) {
                 Spacer()
-                Button("Erneut prüfen") { Task { await ai.checkOllama() } }
+                Button(L10n.text("checkAgain")) { Task { await ai.checkOllama() } }
                     .disabled(ai.ollamaStatus == .checking || ai.ollamaStatus == .pulling)
             }
         }
         if let error = ai.pullError {
-            Text("Laden fehlgeschlagen: \(error)").font(.caption).foregroundStyle(.red)
+            Text(L10n.text("loadFailed", error)).font(.caption).foregroundStyle(.red)
         }
     }
 }

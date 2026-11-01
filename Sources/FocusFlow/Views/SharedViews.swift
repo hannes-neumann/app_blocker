@@ -10,13 +10,13 @@ struct TimerControls: View {
     var body: some View {
         HStack {
             if state.phase == .idle {
-                TextField("Min", text: $durationText)
+                TextField(L10n.text("minUnit"), text: $durationText)
                     .textFieldStyle(.roundedBorder)
                     .multilineTextAlignment(.trailing)
                     .frame(width: 72)
                     .controlSize(.large)
                     .overlay(RoundedRectangle(cornerRadius: 5).stroke(.red, lineWidth: invalid ? 1 : 0))
-                    .help("Fokuszeit, z. B. 25, 50 min, 1h oder 1:30. Enter startet.")
+                    .help(L10n.text("focusFieldHelp"))
                     .onSubmit { start(source: "enter") }
                     .onChange(of: durationText) {
                         invalid = false
@@ -67,17 +67,17 @@ struct BlockingWarnings: View {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
-                Button("Helfer installieren (einmalig)") { state.installHelper() }
+                Button(L10n.text("installHelperOnce")) { state.installHelper() }
                     .controlSize(.small)
             }
         }
         if state.hasStaleHostsBlock && state.phase == .idle {
             HStack {
-                Label("Alte Webseiten-Sperre aktiv", systemImage: "exclamationmark.triangle.fill")
+                Label(L10n.text("staleBlockActive"), systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
                 Spacer()
-                Button("Aufheben") { state.removeStaleHostsBlock() }
+                Button(L10n.text("lift")) { state.removeStaleHostsBlock() }
                     .controlSize(.small)
             }
         }
@@ -97,14 +97,14 @@ struct EstimateControl: View {
 
     var body: some View {
         if editing {
-            TextField("Min", text: $text)
+            TextField(L10n.text("minUnit"), text: $text)
                 .textFieldStyle(.roundedBorder)
                 .controlSize(.small)
                 .font(.caption)
                 .frame(width: 64)
                 .focused($focused)
                 .overlay(RoundedRectangle(cornerRadius: 5).stroke(.red, lineWidth: invalid ? 1 : 0))
-                .help("z. B. 25, 45 min, 1h, 1,5h oder 1:30")
+                .help(L10n.text("durationHelp"))
                 .onSubmit(commit)
                 .onExitCommand { editing = false }
                 .onChange(of: focused) { _, isFocused in
@@ -132,7 +132,7 @@ struct EstimateControl: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("Geschätzte Dauer anpassen")
+            .help(L10n.text("adjustEstimate"))
         }
     }
 
@@ -153,7 +153,7 @@ struct NumberField: View {
     @Binding var value: Int
     let range: ClosedRange<Int>
     var step = 1
-    var unit = "Min"
+    var unit = L10n.text("minUnit")
 
     var body: some View {
         LabeledContent(title) {
