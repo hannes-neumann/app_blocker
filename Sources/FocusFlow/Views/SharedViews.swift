@@ -4,11 +4,29 @@ import SwiftUI
 struct TimerControls: View {
     @Environment(AppState.self) private var state
     var large = false
+    @State private var durationText = ""
+    @State private var invalid = false
 
     var body: some View {
         HStack {
             if state.phase == .idle {
-                Button { state.startFocus() } label: {
+                TextField("Min", text: $durationText)
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 72)
+                    .controlSize(.large)
+                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(.red, lineWidth: invalid ? 1 : 0))
+                    .help("Fokuszeit, z. B. 25, 50 min, 1h oder 1:30. Enter startet.")
+                    .onSubmit(start)
+                    .onChange(of: durationText) {
+                        invalid = false
+                        if let minutes = parseDuration(durationText) { state.settings.focusMinutes = min(minutes, 180) }
+                    }
+                    .onChange(of: state.settings.focusMinutes, initial: true) { _, minutes in
+                        // Keep what the user is typing; only refresh when the value came from elsewhere.
+                        if parseDuration(durationText) != minutes { durationText = formatMinutes(minutes) }
+                    }
+                Button(action: start) {
                     Label("Fokus starten", systemImage: "play.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -27,6 +45,14 @@ struct TimerControls: View {
             }
         }
         .controlSize(large ? .large : .regular)
+    }
+
+    private func start() {
+        guard parseDuration(durationText) != nil else {
+            invalid = true
+            return
+        }
+        state.startFocus()
     }
 }
 
