@@ -60,6 +60,7 @@ final class AIEngine {
     var settings: AISettings = Storage.load(AISettings.self, from: "ai.json") ?? AISettings() {
         didSet {
             Storage.save(settings, to: "ai.json")
+            Analytics.trackChanges(in: "ai", from: oldValue, to: settings)
             if !settings.startOllama { stopOwnedOllama() }
             if settings.provider != oldValue.provider || settings.startOllama != oldValue.startOllama {
                 Task { await startOllamaIfNeeded() }
@@ -139,7 +140,11 @@ final class AIEngine {
         process.environment = environment
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
-        guard (try? process.run()) != nil else { return }
+        let started = Date()
+        guard (try? process.run()) != nil else {
+            Analytics.track(.ollamaStarted, ["success": false])
+            return
+        }
         ownedOllamaPID = process.processIdentifier
         try? String(process.processIdentifier).write(to: Self.pidFile, atomically: true, encoding: .utf8)
 
@@ -149,6 +154,8 @@ final class AIEngine {
             await checkOllama()
             if ollamaStatus != .notRunning { break }
         }
+        Analytics.track(.ollamaStarted, ["success": .bool(ollamaStatus != .notRunning),
+                                         "duration_ms": .int(Int(Date().timeIntervalSince(started) * 1000))])
     }
 
     private func stopOwnedOllama() {
@@ -189,12 +196,17 @@ final class AIEngine {
         pullError = nil
         ollamaStatus = .pulling
         pullProgress = 0
+        let model = settings.ollamaModel, started = Date()
+        Analytics.track(.modelPullStarted, ["model": .string(model)])
         Task {
             do {
                 try await ollama.pull { [weak self] in self?.pullProgress = $0 }
             } catch {
                 pullError = error.localizedDescription
             }
+            Analytics.track(.modelPullFinished, ["model": .string(model), "success": .bool(pullError == nil),
+                                                 "error": .string(pullError ?? ""),
+                                                 "duration_seconds": .int(Int(Date().timeIntervalSince(started)))])
             ollamaStatus = .unknown
             await checkOllama()
         }
@@ -206,14 +218,22 @@ final class AIEngine {
             await startOllamaIfNeeded()
             await checkOllama()
         }
-        switch effectiveProvider {
-        case .apple:
-            if let todos = await TodoRefiner.refineWithApple(note) { return (todos, true) }
-        case .ollama:
-            if let ollama, let todos = await TodoRefiner.refineWithOllama(note, client: ollama) { return (todos, true) }
-        default:
-            break
+        let provider = effectiveProvider, started = Date()
+        var todos: [RefinedTodo]?
+        switch provider {
+        case .apple: todos = await TodoRefiner.refineWithApple(note)
+        case .ollama: if let ollama { todos = await TodoRefiner.refineWithOllama(note, client: ollama) }
+        default: break
         }
+        if provider != .off {
+            Analytics.track(.aiRequest, [
+                "provider": .string(provider.rawValue),
+                "model": .string(provider == .ollama ? settings.ollamaModel : "apple"),
+                "success": .bool(todos != nil),
+                "duration_ms": .int(Int(Date().timeIntervalSince(started) * 1000)),
+            ])
+        }
+        if let todos { return (todos, true) }
         return ([TodoRefiner.heuristic(note)], false)
     }
 

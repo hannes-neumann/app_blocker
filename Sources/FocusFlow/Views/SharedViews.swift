@@ -17,7 +17,7 @@ struct TimerControls: View {
                     .controlSize(.large)
                     .overlay(RoundedRectangle(cornerRadius: 5).stroke(.red, lineWidth: invalid ? 1 : 0))
                     .help("Fokuszeit, z. B. 25, 50 min, 1h oder 1:30. Enter startet.")
-                    .onSubmit(start)
+                    .onSubmit { start(source: "enter") }
                     .onChange(of: durationText) {
                         invalid = false
                         if let minutes = parseDuration(durationText) { state.settings.focusMinutes = min(minutes, 180) }
@@ -26,7 +26,7 @@ struct TimerControls: View {
                         // Keep what the user is typing; only refresh when the value came from elsewhere.
                         if parseDuration(durationText) != minutes { durationText = formatMinutes(minutes) }
                     }
-                Button(action: start) {
+                Button { start(source: "button") } label: {
                     Label("Fokus starten", systemImage: "play.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -47,12 +47,13 @@ struct TimerControls: View {
         .controlSize(large ? .large : .regular)
     }
 
-    private func start() {
+    private func start(source: String) {
         guard parseDuration(durationText) != nil else {
             invalid = true
+            Analytics.track(.focusDurationInvalid, content: ["text": durationText])
             return
         }
-        state.startFocus()
+        state.startFocus(source: source)
     }
 }
 
@@ -121,7 +122,7 @@ struct EstimateControl: View {
         } else {
             Menu {
                 ForEach(Self.options, id: \.self) { minutes in
-                    Button(formatMinutes(minutes)) { state.todos.setEstimate(todo.id, minutes: minutes) }
+                    Button(formatMinutes(minutes)) { state.todos.setEstimate(todo.id, minutes: minutes, method: "menu") }
                 }
                 Divider()
                 Button("Eigene Dauer eingeben…") { editing = true }
@@ -141,7 +142,7 @@ struct EstimateControl: View {
             if text.isEmpty { editing = false }
             return
         }
-        state.todos.setEstimate(todo.id, minutes: min(minutes, 480))
+        state.todos.setEstimate(todo.id, minutes: min(minutes, 480), method: "typed")
         editing = false
     }
 }

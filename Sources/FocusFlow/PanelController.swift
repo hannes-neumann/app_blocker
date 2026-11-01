@@ -69,12 +69,13 @@ final class PanelController {
     func showCapture(onSubmit: @escaping (String) -> Void) {
         if capturePanel.isVisible {
             capturePanel.orderOut(nil)
+            Analytics.track(.quickCaptureCancelled, ["via": "hotkey"])
             return
         }
         let close = { [capturePanel] in capturePanel.orderOut(nil) }
         capturePanel.setContent(QuickCaptureView(
             onSubmit: { text in onSubmit(text); close() },
-            onCancel: close
+            onCancel: { Analytics.track(.quickCaptureCancelled, ["via": "escape"]); close() }
         ))
         capturePanel.position(verticalFraction: 0.3)
         capturePanel.makeKeyAndOrderFront(nil)
@@ -84,6 +85,12 @@ final class PanelController {
         breakPanel.setContent(BreakView().environment(state))
         breakPanel.positionTopRight()
         breakPanel.orderFrontRegardless()
+    }
+
+    /// The user closed the break panel by hand.
+    func dismissBreak() {
+        Analytics.track(.breakPanelClosed, ["phase": .string(state.phase.rawValue)])
+        hideBreak()
     }
 
     func hideBreak() {
@@ -100,7 +107,9 @@ final class PanelController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: item)
     }
 
-    func showDashboard(_ section: DashboardSection) {
+    func showDashboard(_ section: DashboardSection, source: String) {
+        Analytics.track(.dashboardOpened, ["section": .string(section.rawValue), "source": .string(source),
+                                           "was_open": .bool(dashboardWindow?.isVisible ?? false)])
         state.dashboardSection = section
         let window = dashboardWindow ?? makeDashboardWindow()
         dashboardWindow = window
@@ -121,6 +130,7 @@ final class PanelController {
         window.center()
         window.setFrameAutosaveName("FocusFlowDashboard")
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
+            MainActor.assumeIsolated { Analytics.track(.dashboardClosed) }
             NSApp.setActivationPolicy(.accessory)
         }
         return window

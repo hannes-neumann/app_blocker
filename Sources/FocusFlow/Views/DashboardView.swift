@@ -184,9 +184,10 @@ private struct TodosPage: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .fixedSize()
+                .onChange(of: showDone) { Analytics.track(.todoListFilterChanged, ["filter": showDone ? "done" : "open"]) }
                 Spacer()
                 if showDone {
-                    Button("Erledigte löschen") { state.todos.clearDone() }
+                    Button("Erledigte löschen") { state.todos.clearDone(source: "dashboard") }
                         .disabled(todos.isEmpty)
                 } else {
                     Text("Zusammen etwa \(formatMinutes(total))").foregroundStyle(.secondary)
@@ -223,7 +224,7 @@ private struct NoteField: View {
         TextField("Notiz hinzufügen, wird zu Todos mit Zeitschätzung…", text: $text)
             .textFieldStyle(.roundedBorder)
             .onSubmit {
-                state.todos.capture(text)
+                state.todos.capture(text, source: "dashboard")
                 text = ""
             }
     }
@@ -237,7 +238,7 @@ private struct DashboardTodoRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Button { state.todos.toggleDone(todo.id) } label: {
+            Button { state.todos.toggleDone(todo.id, source: "dashboard") } label: {
                 Image(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(todo.isDone ? .green : .secondary)
@@ -268,7 +269,7 @@ private struct DashboardTodoRow: View {
                 }
                 EstimateControl(todo: todo)
             }
-            Button { state.todos.delete(todo.id) } label: {
+            Button { state.todos.delete(todo.id, source: "dashboard") } label: {
                 Image(systemName: "trash").foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)

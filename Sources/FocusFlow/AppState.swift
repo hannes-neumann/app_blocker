@@ -7,6 +7,7 @@ final class AppState {
     var settings: FocusSettings = Storage.load(FocusSettings.self, from: "settings.json") ?? FocusSettings() {
         didSet {
             Storage.save(settings, to: "settings.json")
+            trackSettingsChange(from: oldValue)
             syncDomains()
             if phase == .focus && settings != oldValue { applyBlocking(true) }
         }
@@ -24,7 +25,9 @@ final class AppState {
     private(set) var domainBlockError: String?
     private(set) var hasStaleHostsBlock = false
     private(set) var isHelperInstalled = false
-    var dashboardSection: DashboardSection = .focus
+    var dashboardSection: DashboardSection = .focus {
+        didSet { if dashboardSection != oldValue { Analytics.track(.dashboardSectionViewed, ["section": .string(dashboardSection.rawValue)]) } }
+    }
 
     static let shortcutDescription = "⌃⌥N"
 
@@ -33,6 +36,8 @@ final class AppState {
     @ObservationIgnored private var ticker: Timer?
     @ObservationIgnored private var skippedSuggestions: Set<UUID> = []
     @ObservationIgnored private var askedForHelper = false
+    @ObservationIgnored private var phaseStartedAt: Date?
+    @ObservationIgnored private var pausedAt: Date?
     @ObservationIgnored private let appBlocker = AppBlocker()
     @ObservationIgnored private let domainBlocker = DomainBlocker()
     @ObservationIgnored private var hotKey: HotKey?
@@ -56,19 +61,33 @@ final class AppState {
         panels = PanelController(state: self)
         ai.refreshStatus()
         todos.refiner = { [ai] note in await ai.refine(note) }
+        Analytics.track(.appLaunched, [
+            "os_version": .string(ProcessInfo.processInfo.operatingSystemVersionString),
+            "open_todos": .int(todos.open.count),
+            "focus_minutes": .int(settings.focusMinutes),
+            "blocked_apps": .int(settings.blockedApps.count),
+            "blocked_domains": .int(settings.blockDomains ? settings.blockedDomains.count : 0),
+            "ai_provider": .string(ai.settings.provider.rawValue),
+        ])
         refreshHelperStatus()
         syncDomains()
         domainBlocker.setBlocking(false)
-        appBlocker.onBlocked = { [weak self] name in self?.panels.showBlockedHUD(appName: name) }
+        appBlocker.onBlocked = { [weak self] name, bundleID in
+            self?.panels.showBlockedHUD(appName: name)
+            Analytics.track(.appBlocked, ["bundle_id": .string(bundleID), "app_name": .string(name)])
+        }
         todos.onCompletionChange = { [weak self] todo in self?.stats.todoChanged(todo) }
         hotKey = HotKey(keyCode: kVK_ANSI_N, modifiers: controlKey | optionKey) { [weak self] in
-            self?.showQuickCapture()
+            self?.showQuickCapture(source: "hotkey")
         }
         todos.resumePendingRefinements()
     }
 
     func shutdown() {
-        if phase == .focus { recordFocus(completed: false) }
+        endPhase(reason: "quit")
+        Analytics.flushChanges()
+        Analytics.track(.appQuit, ["session_seconds": .int(Int(Date().timeIntervalSince(Analytics.launchedAt)))])
+        Analytics.flush()
         appBlocker.stop()
         domainBlocker.setBlocking(false)
         ai.shutdown()
@@ -76,23 +95,27 @@ final class AppState {
 
     // MARK: - Timer
 
-    func startFocus() { begin(.focus) }
+    func startFocus(source: String = "button") { begin(.focus, source: source) }
 
     func togglePause() {
         guard phase != .idle else { return }
         if isPaused {
             endDate = Date().addingTimeInterval(remaining)
             isPaused = false
+            Analytics.track(.timerResumed, ["phase": .string(phase.rawValue),
+                                            "paused_seconds": .int(Int(Date().timeIntervalSince(pausedAt ?? Date())))])
         } else {
             tick()
             isPaused = true
+            pausedAt = Date()
+            Analytics.track(.timerPaused, ["phase": .string(phase.rawValue), "remaining_seconds": .int(Int(remaining))])
         }
     }
 
-    func skipPhase() { finishPhase(playSound: false) }
+    func skipPhase() { finishPhase(playSound: false, reason: "skipped") }
 
     func stop() {
-        if phase == .focus { recordFocus(completed: false) }
+        endPhase(reason: "stopped")
         ticker?.invalidate()
         phase = .idle
         remaining = 0
@@ -102,13 +125,20 @@ final class AppState {
         applyBlocking(false)
     }
 
-    private func begin(_ newPhase: Phase) {
+    private func begin(_ newPhase: Phase, source: String) {
         phase = newPhase
         phaseDuration = TimeInterval(max(minutes(for: newPhase), 1) * 60)
         remaining = phaseDuration
         endDate = Date().addingTimeInterval(phaseDuration)
         isPaused = false
         if newPhase == .focus { focusStartedAt = Date() }
+        phaseStartedAt = Date()
+        Analytics.track(newPhase == .focus ? .focusStarted : .breakStarted, [
+            "phase": .string(newPhase.rawValue),
+            "planned_minutes": .int(Int(phaseDuration / 60)),
+            "round": .int(completedFocusSessions % max(settings.sessionsUntilLongBreak, 1) + (newPhase == .focus ? 1 : 0)),
+            "source": .string(source),
+        ])
         startTicker()
         applyBlocking(newPhase == .focus)
 
@@ -121,17 +151,18 @@ final class AppState {
         }
     }
 
-    private func finishPhase(playSound: Bool = true) {
+    private func finishPhase(playSound: Bool = true, reason: String = "completed") {
         if playSound { NSSound(named: "Glass")?.play() }
-        switch phase {
+        let finished = phase
+        endPhase(reason: reason)
+        switch finished {
         case .focus:
-            recordFocus(completed: remaining <= 0)
             completedFocusSessions += 1
             let isLong = completedFocusSessions % max(settings.sessionsUntilLongBreak, 1) == 0
-            begin(isLong ? .longBreak : .shortBreak)
+            begin(isLong ? .longBreak : .shortBreak, source: "auto")
         case .shortBreak, .longBreak:
             if settings.autoStartFocus {
-                begin(.focus)
+                begin(.focus, source: "auto")
             } else {
                 // Keep the round count so the next focus phase continues the cycle.
                 ticker?.invalidate()
@@ -142,6 +173,22 @@ final class AppState {
         case .idle:
             break
         }
+    }
+
+    /// Logs the end of the running phase and records focus time in the statistics.
+    private func endPhase(reason: String) {
+        guard phase != .idle else { return }
+        if !isPaused, let endDate { remaining = max(0, endDate.timeIntervalSinceNow) }
+        let completed = reason == "completed" && remaining <= 0
+        Analytics.track(phase == .focus ? .focusEnded : .breakEnded, [
+            "phase": .string(phase.rawValue),
+            "reason": .string(reason),
+            "completed": .bool(completed),
+            "planned_seconds": .int(Int(phaseDuration)),
+            "elapsed_seconds": .int(Int(phaseDuration - remaining)),
+            "wall_seconds": .int(Int(Date().timeIntervalSince(phaseStartedAt ?? Date()))),
+        ])
+        if phase == .focus { recordFocus(completed: completed) }
     }
 
     private func recordFocus(completed: Bool) {
@@ -213,6 +260,7 @@ final class AppState {
     func installHelper() {
         Task {
             let ok = await domainBlocker.installHelper()
+            Analytics.track(.helperInstalled, ["success": .bool(ok)])
             refreshHelperStatus()
             domainBlockError = ok ? nil : "Webseiten werden nicht blockiert (Installation des Helfers abgebrochen)."
         }
@@ -220,49 +268,80 @@ final class AppState {
 
     func uninstallHelper() {
         Task {
-            _ = await domainBlocker.uninstallHelper()
+            let ok = await domainBlocker.uninstallHelper()
+            Analytics.track(.helperUninstalled, ["success": .bool(ok)])
             refreshHelperStatus()
         }
     }
 
     func removeStaleHostsBlock() {
         Task {
-            _ = await domainBlocker.removeStaleBlock()
+            let ok = await domainBlocker.removeStaleBlock()
+            Analytics.track(.staleBlockRemoved, ["success": .bool(ok)])
             refreshHelperStatus()
         }
     }
 
     // MARK: - Quick capture & break suggestions
 
-    func showQuickCapture() {
-        panels.showCapture { [weak self] text in self?.todos.capture(text) }
+    func showQuickCapture(source: String) {
+        Analytics.track(.quickCaptureOpened, ["source": .string(source)])
+        panels.showCapture { [weak self] text in self?.todos.capture(text, source: "quick_capture") }
     }
 
     func refreshSuggestion() {
         guard phase.isBreak else { suggestion = nil; return }
         // Round up so a 5 min todo still fits a 5 min break once the first second has ticked.
         let available = max(Int((remaining / 60).rounded(.up)), 1)
+        let previous = suggestion?.id
         suggestion = todos.suggestion(fitting: available, excluding: skippedSuggestions)
         if suggestion == nil && !skippedSuggestions.isEmpty {
             // Every fitting todo was skipped once: start over.
             skippedSuggestions = []
             suggestion = todos.suggestion(fitting: available, excluding: [])
         }
+        if let suggestion, suggestion.id != previous {
+            Analytics.track(.suggestionShown, ["todo_id": .string(suggestion.id.uuidString),
+                                               "estimated_minutes": .int(suggestion.estimatedMinutes ?? 0),
+                                               "available_minutes": .int(available)])
+        }
     }
 
     func nextSuggestion() {
-        if let suggestion { skippedSuggestions.insert(suggestion.id) }
+        if let suggestion {
+            skippedSuggestions.insert(suggestion.id)
+            Analytics.track(.suggestionSkipped, ["todo_id": .string(suggestion.id.uuidString)])
+        }
         refreshSuggestion()
     }
 
     func completeSuggestion() {
         guard let suggestion else { return }
-        todos.toggleDone(suggestion.id)
+        todos.toggleDone(suggestion.id, source: "break_suggestion")
         refreshSuggestion()
     }
 
     private func endBreak() {
         suggestion = nil
         panels.hideBreak()
+    }
+
+    // MARK: - Analytics
+
+    private func trackSettingsChange(from old: FocusSettings) {
+        Analytics.trackChanges(in: "focus", from: old, to: settings)
+        let oldApps = Set(old.blockedApps.map(\.bundleID)), newApps = Set(settings.blockedApps.map(\.bundleID))
+        for app in settings.blockedApps where !oldApps.contains(app.bundleID) {
+            Analytics.track(.blockedAppAdded, ["bundle_id": .string(app.bundleID), "app_name": .string(app.name)])
+        }
+        for app in old.blockedApps where !newApps.contains(app.bundleID) {
+            Analytics.track(.blockedAppRemoved, ["bundle_id": .string(app.bundleID), "app_name": .string(app.name)])
+        }
+        for domain in settings.blockedDomains where !old.blockedDomains.contains(domain) {
+            Analytics.track(.blockedDomainAdded, ["count": .int(settings.blockedDomains.count)], content: ["domain": domain])
+        }
+        for domain in old.blockedDomains where !settings.blockedDomains.contains(domain) {
+            Analytics.track(.blockedDomainRemoved, ["count": .int(settings.blockedDomains.count)], content: ["domain": domain])
+        }
     }
 }

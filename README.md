@@ -41,6 +41,7 @@ Für die Entwicklung reicht auch `swift build`. Das fertige `.app`-Bundle brauch
 | Statistik | `StatsStore.swift`, `Views/StatsView.swift` (Swift Charts) |
 | Dashboard | `Views/DashboardView.swift` |
 | KI | `AIEngine.swift` (Auswahl des Modells), `OllamaClient.swift`, `TodoRefiner.swift` (Anweisungen, Stichwort-Schätzung) |
+| Protokoll | `Analytics.swift` (Events, `AnalyticsSink`, lokale Datei) |
 
 **Webseiten-Sperre:** Beim ersten Fokus installiert FocusFlow einmalig einen kleinen Systemdienst
 (`/Library/LaunchDaemons/com.hannesneumann.FocusFlow.blocker.plist`). Dafür fragt macOS ein einziges Mal
@@ -66,6 +67,20 @@ sich per Klick auf das Zeit-Badge ändern, entweder über eine Vorauswahl oder m
 als Text („25“, „45 min“, „1h“, „1,5h“, „1:30“).
 
 Daten (Einstellungen, Todos) liegen in `~/Library/Application Support/FocusFlow/`.
+
+**Protokoll:** Jede Bedienung wird als eine JSON-Zeile in `Logs/events-JJJJ-MM-TT.jsonl` im selben Ordner
+gespeichert (abschaltbar und löschbar unter Einstellungen → Allgemein, Dateien älter als 180 Tage werden
+gelöscht). Jedes Event hat `name`, `timestamp`, `sessionID` (ein App-Start), `installID`, `appVersion`,
+`properties` und optional `content`. In `content` stehen persönliche Texte wie Notizen, Todo-Titel und Domains;
+alles andere ist frei von Inhalten. Auswerten lässt es sich z. B. so:
+
+```bash
+cat ~/Library/Application\ Support/FocusFlow/Logs/*.jsonl | jq -s 'group_by(.name) | map({name: .[0].name, count: length})'
+```
+
+Event-Namen und Schlüssel folgen den Regeln von Firebase Analytics (snake_case, höchstens 40 Zeichen). Für ein
+späteres Backend implementiert man `AnalyticsSink`, lässt dabei `content` weg, fragt die Nutzer vorher um
+Erlaubnis und hängt den Sink an `Analytics.sinks` an.
 
 ## Bekannte Grenzen
 

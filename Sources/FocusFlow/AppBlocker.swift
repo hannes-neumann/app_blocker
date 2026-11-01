@@ -3,7 +3,7 @@ import AppKit
 /// Quits blocked apps while a focus phase runs and keeps them from being reopened.
 @MainActor
 final class AppBlocker {
-    var onBlocked: ((String) -> Void)?
+    var onBlocked: ((_ name: String, _ bundleID: String) -> Void)?
 
     private var blockedBundleIDs: Set<String> = []
     private var observers: [NSObjectProtocol] = []
@@ -35,6 +35,6 @@ final class AppBlocker {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             if !app.isTerminated { app.hide() }
         }
-        onBlocked?(app.localizedName ?? id)
+        onBlocked?(app.localizedName ?? id, id)
     }
 }

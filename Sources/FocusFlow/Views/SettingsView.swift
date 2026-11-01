@@ -18,6 +18,9 @@ struct SettingsView: View {
             .labelsHidden()
             .fixedSize()
             .padding(.top, 8)
+            .onChange(of: tab, initial: true) {
+                Analytics.track(.settingsTabViewed, ["tab": .string([0: "timer", 1: "blocking", 2: "general", 3: "ai"][tab] ?? "\(tab)")])
+            }
 
             switch tab {
             case 0: TimerSettingsView(settings: $state.settings)
@@ -93,7 +96,10 @@ private struct BlockingSettingsView: View {
                 if settings.blockedDomains.isEmpty {
                     Text("Noch keine Webseiten ausgewählt.").foregroundStyle(.secondary)
                 }
-                Button("Webseite hinzufügen…", systemImage: "plus") { addingDomain = true }
+                Button("Webseite hinzufügen…", systemImage: "plus") {
+                    addingDomain = true
+                    Analytics.track(.addDomainOpened)
+                }
             } header: {
                 Text("Webseiten")
             } footer: {
@@ -201,7 +207,10 @@ private struct AddDomainSheet: View {
             .font(.caption)
             HStack {
                 Spacer()
-                Button("Abbrechen", role: .cancel) { dismiss() }
+                Button("Abbrechen", role: .cancel) {
+                    Analytics.track(.addDomainCancelled, ["had_text": .bool(!url.isEmpty)])
+                    dismiss()
+                }
                     .keyboardShortcut(.cancelAction)
                 Button("Hinzufügen", action: submit)
                     .keyboardShortcut(.defaultAction)
@@ -216,6 +225,7 @@ private struct AddDomainSheet: View {
     private func submit() {
         guard let domain else {
             showError = true
+            Analytics.track(.addDomainInvalid, content: ["text": url])
             return
         }
         add(domain)
@@ -238,6 +248,9 @@ private struct AppIcon: View {
 }
 
 private struct GeneralSettingsView: View {
+    @State private var loggingEnabled = Analytics.settings.enabled
+    @State private var logSize = LocalFileSink.totalSize
+
     var body: some View {
         Form {
             Section("Schnellnotiz") {
@@ -246,7 +259,36 @@ private struct GeneralSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section {
+                Toggle("Nutzung protokollieren", isOn: $loggingEnabled)
+                    .onChange(of: loggingEnabled) {
+                        // Log the switch itself while logging is still on.
+                        if !loggingEnabled { Analytics.track(.settingChanged, ["setting": "logging.enabled", "old_value": true, "new_value": false]) }
+                        Analytics.settings.enabled = loggingEnabled
+                        if loggingEnabled { Analytics.track(.settingChanged, ["setting": "logging.enabled", "old_value": false, "new_value": true]) }
+                    }
+                LabeledContent("Gespeichert", value: ByteCountFormatter.string(fromByteCount: logSize, countStyle: .file))
+                HStack {
+                    Button("Im Finder zeigen") { NSWorkspace.shared.open(LocalFileSink.directory) }
+                    Button("Protokoll löschen", role: .destructive) {
+                        Analytics.flush()
+                        LocalFileSink.deleteAll()
+                        logSize = LocalFileSink.totalSize
+                    }
+                }
+            } header: {
+                Text("Protokoll")
+            } footer: {
+                Text("Speichert jede Bedienung mit Zeitpunkt auf diesem Mac, damit wir die App anhand echter Nutzung verbessern können. Nichts verlässt deinen Mac. Texte wie Notizen und Todo-Titel stehen getrennt im Feld „content“, damit sie beim späteren Teilen weggelassen werden können.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
+        .onAppear {
+            Analytics.flush()
+            logSize = LocalFileSink.totalSize
+        }
     }
 }

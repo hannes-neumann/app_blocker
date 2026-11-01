@@ -34,7 +34,10 @@ struct MenuContentView: View {
         }
         .padding(16)
         .frame(width: 340)
-        .onAppear { state.refreshSuggestion() }
+        .onAppear {
+            state.refreshSuggestion()
+            Analytics.track(.menuOpened, ["phase": .string(state.phase.rawValue)])
+        }
     }
 
     // MARK: Timer
@@ -66,7 +69,7 @@ struct MenuContentView: View {
         let streak = state.stats.streak
         return Button {
             dismiss()
-            state.panels.showDashboard(.stats)
+            state.panels.showDashboard(.stats, source: "menu_streak")
         } label: {
             HStack(spacing: 10) {
                 Gauge(value: Double(min(today, goal)), in: 0...Double(max(goal, 1))) { EmptyView() }
@@ -129,7 +132,7 @@ struct MenuContentView: View {
             TextField("Notiz hinzufügen…", text: $newNote)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit {
-                    state.todos.capture(newNote)
+                    state.todos.capture(newNote, source: "menu")
                     newNote = ""
                 }
 
@@ -154,7 +157,7 @@ struct MenuContentView: View {
                     VStack(spacing: 2) {
                         ForEach(done.prefix(10)) { TodoRow(todo: $0) }
                     }
-                    Button("Erledigte löschen") { state.todos.clearDone() }
+                    Button("Erledigte löschen") { state.todos.clearDone(source: "menu") }
                         .controlSize(.small)
                 }
                 .font(.callout)
@@ -166,11 +169,11 @@ struct MenuContentView: View {
         HStack {
             Button("Dashboard") {
                 dismiss()
-                state.panels.showDashboard(.focus)
+                state.panels.showDashboard(.focus, source: "menu")
             }
             Button("Einstellungen…") {
                 dismiss()
-                state.panels.showDashboard(.settings)
+                state.panels.showDashboard(.settings, source: "menu")
             }
             Spacer()
             Button("Beenden") { NSApp.terminate(nil) }
@@ -191,7 +194,7 @@ struct TodoRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Button { state.todos.toggleDone(todo.id) } label: {
+            Button { state.todos.toggleDone(todo.id, source: "menu") } label: {
                 Image(systemName: todo.isDone ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(todo.isDone ? .green : .secondary)
             }
@@ -231,7 +234,7 @@ struct TodoRow: View {
 
             // Always laid out and only faded in, so hovering never changes the row's size
             // (which would make the whole menu window jump).
-            Button { state.todos.delete(todo.id) } label: {
+            Button { state.todos.delete(todo.id, source: "menu") } label: {
                 Image(systemName: "trash").foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)

@@ -1,0 +1,258 @@
+import Foundation
+
+/// A property value of an event. Kept to the types analytics backends like Firebase accept.
+enum AnalyticsValue: Codable, Equatable, ExpressibleByStringLiteral, ExpressibleByIntegerLiteral,
+    ExpressibleByFloatLiteral, ExpressibleByBooleanLiteral {
+    case string(String)
+    case int(Int)
+    case double(Double)
+    case bool(Bool)
+
+    init(stringLiteral value: String) { self = .string(value) }
+    init(integerLiteral value: Int) { self = .int(value) }
+    init(floatLiteral value: Double) { self = .double(value) }
+    init(booleanLiteral value: Bool) { self = .bool(value) }
+
+    init?(_ any: Any) {
+        switch any {
+        case let v as Bool: self = .bool(v)
+        case let v as Int: self = .int(v)
+        case let v as Double: self = .double(v)
+        case let v as String: self = .string(v)
+        case let v as any RawRepresentable<String>: self = .string(v.rawValue)
+        default: return nil
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let v = try? c.decode(Bool.self) { self = .bool(v) }
+        else if let v = try? c.decode(Int.self) { self = .int(v) }
+        else if let v = try? c.decode(Double.self) { self = .double(v) }
+        else { self = .string(try c.decode(String.self)) }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .string(let v): try c.encode(v)
+        case .int(let v): try c.encode(v)
+        case .double(let v): try c.encode(v)
+        case .bool(let v): try c.encode(v)
+        }
+    }
+}
+
+typealias AnalyticsProperties = [String: AnalyticsValue]
+
+/// Everything the user does in the app. Names and keys are snake_case and at most 40 characters,
+/// the limits of Firebase Analytics, so events can be sent there unchanged later.
+enum AnalyticsEventName: String, Codable {
+    // App
+    case appLaunched = "app_launched"
+    case appQuit = "app_quit"
+    case menuOpened = "menu_opened"
+    case dashboardOpened = "dashboard_opened"
+    case dashboardSectionViewed = "dashboard_section_viewed"
+    case dashboardClosed = "dashboard_closed"
+    case settingsTabViewed = "settings_tab_viewed"
+    case statsRangeChanged = "stats_range_changed"
+    // Timer
+    case focusStarted = "focus_started"
+    case focusEnded = "focus_ended"
+    case breakStarted = "break_started"
+    case breakEnded = "break_ended"
+    case timerPaused = "timer_paused"
+    case timerResumed = "timer_resumed"
+    case focusDurationInvalid = "focus_duration_invalid"
+    case appBlocked = "app_blocked"
+    case breakPanelClosed = "break_panel_closed"
+    // Todos
+    case quickCaptureOpened = "quick_capture_opened"
+    case quickCaptureCancelled = "quick_capture_cancelled"
+    case noteCaptured = "note_captured"
+    case noteRefined = "note_refined"
+    case todoCompleted = "todo_completed"
+    case todoReopened = "todo_reopened"
+    case todoEstimateChanged = "todo_estimate_changed"
+    case todoTitleChanged = "todo_title_changed"
+    case todoDeleted = "todo_deleted"
+    case todosCleared = "todos_cleared"
+    case todoListFilterChanged = "todo_list_filter_changed"
+    case suggestionShown = "suggestion_shown"
+    case suggestionSkipped = "suggestion_skipped"
+    // Settings & blocking
+    case settingChanged = "setting_changed"
+    case blockedAppAdded = "blocked_app_added"
+    case blockedAppRemoved = "blocked_app_removed"
+    case blockedDomainAdded = "blocked_domain_added"
+    case blockedDomainRemoved = "blocked_domain_removed"
+    case addDomainOpened = "add_domain_opened"
+    case addDomainCancelled = "add_domain_cancelled"
+    case addDomainInvalid = "add_domain_invalid"
+    case helperInstalled = "helper_installed"
+    case helperUninstalled = "helper_uninstalled"
+    case staleBlockRemoved = "stale_block_removed"
+    // AI
+    case aiRequest = "ai_request"
+    case ollamaStarted = "ollama_started"
+    case modelPullStarted = "model_pull_started"
+    case modelPullFinished = "model_pull_finished"
+}
+
+struct AnalyticsEvent: Codable {
+    var id = UUID()
+    let name: AnalyticsEventName
+    var timestamp = Date()
+    /// One app launch; groups the events of a session.
+    let sessionID: UUID
+    /// Stable per installation, anonymous.
+    let installID: UUID
+    let appVersion: String
+    var properties: AnalyticsProperties
+    /// Personal text such as notes, todo titles or domains. Stays on this Mac: sinks that send events
+    /// elsewhere must drop it.
+    var content: [String: String]?
+}
+
+/// A destination for events: the local log file now, later e.g. Firebase.
+protocol AnalyticsSink: AnyObject {
+    func record(_ event: AnalyticsEvent)
+    /// Called on quit, so buffered events can be written.
+    func flush()
+}
+
+/// Appends events as JSON lines to one file per day in `Logs/` of the app's storage folder.
+final class LocalFileSink: AnalyticsSink {
+    static let directory = Storage.directory.appendingPathComponent("Logs", isDirectory: true)
+    /// Older files are deleted on launch.
+    static let retentionDays = 180
+
+    private let queue = DispatchQueue(label: "FocusFlow.analytics")
+    private let encoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .iso8601
+        e.outputFormatting = .sortedKeys
+        return e
+    }()
+    private let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    init() {
+        try? FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
+        queue.async { Self.deleteOldFiles() }
+    }
+
+    func record(_ event: AnalyticsEvent) {
+        guard var line = try? encoder.encode(event) else { return }
+        line.append(0x0A)
+        let url = Self.directory.appendingPathComponent("events-\(dayFormatter.string(from: event.timestamp)).jsonl")
+        queue.async {
+            if let handle = try? FileHandle(forWritingTo: url) {
+                defer { try? handle.close() }
+                _ = try? handle.seekToEnd()
+                try? handle.write(contentsOf: line)
+            } else {
+                try? line.write(to: url)
+            }
+        }
+    }
+
+    func flush() {
+        queue.sync {}
+    }
+
+    static var files: [URL] {
+        ((try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? [])
+            .filter { $0.lastPathComponent.hasPrefix("events-") && $0.pathExtension == "jsonl" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    static var totalSize: Int64 {
+        files.reduce(0) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0) }
+    }
+
+    static func deleteAll() {
+        files.forEach { try? FileManager.default.removeItem(at: $0) }
+    }
+
+    private static func deleteOldFiles() {
+        let cutoff = Date().addingTimeInterval(-Double(retentionDays) * 86_400)
+        for url in files {
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            if let modified, modified < cutoff { try? FileManager.default.removeItem(at: url) }
+        }
+    }
+}
+
+struct AnalyticsSettings: Codable {
+    var enabled = true
+    var installID = UUID()
+}
+
+/// Records what the user does, for improving the app with real usage data.
+///
+/// Call `Analytics.track` from anywhere on the main actor. To send events to a backend later, implement
+/// `AnalyticsSink` (dropping `content`, and asking the user first) and add it in `Analytics.sinks`.
+@MainActor
+enum Analytics {
+    static var settings = Storage.load(AnalyticsSettings.self, from: "analytics.json") ?? AnalyticsSettings() {
+        didSet { Storage.save(settings, to: "analytics.json") }
+    }
+    static var sinks: [AnalyticsSink] = [LocalFileSink()]
+    static let sessionID = UUID()
+    static let launchedAt = Date()
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+
+    static func track(_ name: AnalyticsEventName, _ properties: AnalyticsProperties = [:], content: [String: String]? = nil) {
+        guard settings.enabled else { return }
+        let event = AnalyticsEvent(name: name, sessionID: sessionID, installID: settings.installID,
+                                   appVersion: appVersion, properties: properties, content: content)
+        sinks.forEach { $0.record(event) }
+    }
+
+    static func flush() {
+        sinks.forEach { $0.flush() }
+    }
+
+    // MARK: - Settings changes
+
+    private static var pendingChanges: [String: (old: AnalyticsValue, new: AnalyticsValue)] = [:]
+    private static var pendingFlush: Task<Void, Never>?
+
+    /// Logs every field that differs between two settings values as `setting_changed`. Changes to one
+    /// field within a second are merged, so typing "50" logs one change instead of "5" and "50".
+    static func trackChanges<T>(in scope: String, from old: T, to new: T) {
+        let oldFields = Dictionary(Mirror(reflecting: old).children.compactMap { c in c.label.map { ($0, c.value) } },
+                                   uniquingKeysWith: { a, _ in a })
+        for child in Mirror(reflecting: new).children {
+            guard let label = child.label, let before = oldFields[label].flatMap(AnalyticsValue.init),
+                  let after = AnalyticsValue(child.value), before != after else { continue }
+            let key = "\(scope).\(snakeCase(label))"
+            pendingChanges[key] = (pendingChanges[key]?.old ?? before, after)
+        }
+        pendingFlush?.cancel()
+        pendingFlush = Task {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            flushChanges()
+        }
+    }
+
+    static func flushChanges() {
+        for (key, change) in pendingChanges.sorted(by: { $0.key < $1.key }) where change.old != change.new {
+            track(.settingChanged, ["setting": .string(key), "old_value": change.old, "new_value": change.new])
+        }
+        pendingChanges = [:]
+    }
+
+    private static func snakeCase(_ name: String) -> String {
+        name.reduce(into: "") { result, c in
+            if c.isUppercase { result += "_" + c.lowercased() } else { result.append(c) }
+        }
+    }
+}
