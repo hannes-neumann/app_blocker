@@ -48,8 +48,7 @@ private struct TimerSettingsView: View {
 private struct BlockingSettingsView: View {
     @Environment(AppState.self) private var state
     @Binding var settings: FocusSettings
-    @State private var newDomain = ""
-    @State private var domainError = false
+    @State private var addingDomain = false
 
     var body: some View {
         Form {
@@ -91,15 +90,10 @@ private struct BlockingSettingsView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                HStack {
-                    TextField("z. B. netflix.com", text: $newDomain)
-                        .onSubmit(addDomain)
-                    Button("Hinzufügen", action: addDomain)
-                        .disabled(newDomain.isEmpty)
+                if settings.blockedDomains.isEmpty {
+                    Text("Noch keine Webseiten ausgewählt.").foregroundStyle(.secondary)
                 }
-                if domainError {
-                    Text("Das sieht nicht nach einer gültigen Domain aus.").font(.caption).foregroundStyle(.red)
-                }
+                Button("Webseite hinzufügen…", systemImage: "plus") { addingDomain = true }
             } header: {
                 Text("Webseiten")
             } footer: {
@@ -129,6 +123,11 @@ private struct BlockingSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $addingDomain) {
+            AddDomainSheet { domain in
+                if !settings.blockedDomains.contains(domain) { settings.blockedDomains.append(domain) }
+            }
+        }
     }
 
     private var runningApps: [BlockedApp] {
@@ -160,15 +159,67 @@ private struct BlockingSettingsView: View {
         guard !settings.blockedApps.contains(where: { $0.bundleID == app.bundleID }) else { return }
         settings.blockedApps.append(app)
     }
+}
 
-    private func addDomain() {
-        guard let domain = DomainBlocker.normalize(newDomain) else {
-            domainError = true
+/// Asks for the address of a website to block and shows which domain that becomes.
+private struct AddDomainSheet: View {
+    let add: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var url = ""
+    @State private var showError = false
+    @FocusState private var focused: Bool
+
+    private var domain: String? { DomainBlocker.normalize(url) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Webseite blockieren").font(.headline)
+            Text("Gib die Adresse der Webseite ein. Du kannst auch einen Link aus dem Browser einfügen.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("URL").font(.caption).foregroundStyle(.secondary)
+                TextField("https://www.netflix.com", text: $url)
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.large)
+                    .focused($focused)
+                    .onSubmit(submit)
+                    .onChange(of: url) { showError = false }
+            }
+            Group {
+                if let domain {
+                    Label("Blockiert \(domain) und www.\(domain)", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                } else if showError {
+                    Label("Das ist keine gültige Adresse, z. B. netflix.com", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                } else {
+                    Text(" ")
+                }
+            }
+            .font(.caption)
+            HStack {
+                Spacer()
+                Button("Abbrechen", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Hinzufügen", action: submit)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(url.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 400)
+        .onAppear { focused = true }
+    }
+
+    private func submit() {
+        guard let domain else {
+            showError = true
             return
         }
-        domainError = false
-        if !settings.blockedDomains.contains(domain) { settings.blockedDomains.append(domain) }
-        newDomain = ""
+        add(domain)
+        dismiss()
     }
 }
 
