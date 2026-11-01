@@ -97,3 +97,25 @@ enum Storage {
 func formatMinutes(_ minutes: Int) -> String {
     minutes < 60 ? "\(minutes) Min" : String(format: "%d:%02d h", minutes / 60, minutes % 60)
 }
+
+/// Parses a typed duration such as "45", "45 min", "1h", "1,5 h", "1:30" or "1h 30" into minutes.
+func parseDuration(_ input: String) -> Int? {
+    let text = input.lowercased().trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+    guard !text.isEmpty else { return nil }
+    let patterns: [(String, ([Double]) -> Double)] = [
+        (#"^(\d+):(\d{1,2})\s*(h|std)?$"#, { $0[0] * 60 + $0[1] }),
+        (#"^(\d+(?:\.\d+)?)\s*(?:h|std|stunden?|hours?)\s*(\d+)\s*(?:m|min|minuten?)?$"#, { $0[0] * 60 + $0[1] }),
+        (#"^(\d+(?:\.\d+)?)\s*(?:h|std|stunden?|hours?)$"#, { $0[0] * 60 }),
+        (#"^(\d+(?:\.\d+)?)\s*(?:m|min|minuten?|minutes?)?$"#, { $0[0] }),
+    ]
+    for (pattern, combine) in patterns {
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { continue }
+        let numbers = (1..<match.numberOfRanges).compactMap { i -> Double? in
+            Range(match.range(at: i), in: text).flatMap { Double(text[$0]) }
+        }
+        let minutes = Int(combine(numbers).rounded())
+        return minutes > 0 ? minutes : nil
+    }
+    return nil
+}

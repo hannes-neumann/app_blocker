@@ -3,19 +3,32 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Environment(AppState.self) private var state
+    @State private var tab = 0
 
     var body: some View {
         @Bindable var state = state
-        TabView {
-            TimerSettingsView(settings: $state.settings)
-                .tabItem { Label("Timer", systemImage: "timer") }
-            BlockingSettingsView(settings: $state.settings)
-                .tabItem { Label("Blockieren", systemImage: "hand.raised") }
-            GeneralSettingsView(aiStatus: state.aiStatus)
-                .tabItem { Label("Allgemein", systemImage: "gearshape") }
+        VStack(spacing: 0) {
+            Picker("Bereich", selection: $tab) {
+                Label("Timer", systemImage: "timer").tag(0)
+                Label("Blockieren", systemImage: "hand.raised").tag(1)
+                Label("KI", systemImage: "sparkles").tag(3)
+                Label("Allgemein", systemImage: "gearshape").tag(2)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .padding(.top, 8)
+            .onChange(of: tab, initial: true) {
+                Analytics.track(.settingsTabViewed, ["tab": .string([0: "timer", 1: "blocking", 2: "general", 3: "ai"][tab] ?? "\(tab)")])
+            }
+
+            switch tab {
+            case 0: TimerSettingsView(settings: $state.settings)
+            case 1: BlockingSettingsView(settings: $state.settings)
+            case 3: AISettingsView(ai: state.ai)
+            default: GeneralSettingsView()
+            }
         }
-        .padding()
-        .frame(width: 480, height: 460)
     }
 }
 
@@ -24,14 +37,12 @@ private struct TimerSettingsView: View {
 
     var body: some View {
         Form {
-            Stepper("Fokus: \(settings.focusMinutes) Min", value: $settings.focusMinutes, in: 1...180)
-            Stepper("Kurze Pause: \(settings.shortBreakMinutes) Min", value: $settings.shortBreakMinutes, in: 1...60)
-            Stepper("Lange Pause: \(settings.longBreakMinutes) Min", value: $settings.longBreakMinutes, in: 1...120)
-            Stepper("Lange Pause nach \(settings.sessionsUntilLongBreak) Runden",
-                    value: $settings.sessionsUntilLongBreak, in: 1...12)
+            NumberField(title: "Fokus", value: $settings.focusMinutes, range: 1...180)
+            NumberField(title: "Kurze Pause", value: $settings.shortBreakMinutes, range: 1...60)
+            NumberField(title: "Lange Pause", value: $settings.longBreakMinutes, range: 1...120)
+            NumberField(title: "Lange Pause nach", value: $settings.sessionsUntilLongBreak, range: 1...12, unit: "Runden")
             Toggle("Nach der Pause automatisch weiterfokussieren", isOn: $settings.autoStartFocus)
-            Stepper("Tagesziel: \(settings.dailyGoalMinutes) Min Fokus",
-                    value: $settings.dailyGoalMinutes, in: 25...600, step: 25)
+            NumberField(title: "Tagesziel", value: $settings.dailyGoalMinutes, range: 5...600, step: 25, unit: "Min Fokus")
         }
         .formStyle(.grouped)
     }
@@ -40,8 +51,7 @@ private struct TimerSettingsView: View {
 private struct BlockingSettingsView: View {
     @Environment(AppState.self) private var state
     @Binding var settings: FocusSettings
-    @State private var newDomain = ""
-    @State private var domainError = false
+    @State private var addingDomain = false
 
     var body: some View {
         Form {
@@ -83,14 +93,12 @@ private struct BlockingSettingsView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                HStack {
-                    TextField("z. B. netflix.com", text: $newDomain)
-                        .onSubmit(addDomain)
-                    Button("Hinzufügen", action: addDomain)
-                        .disabled(newDomain.isEmpty)
+                if settings.blockedDomains.isEmpty {
+                    Text("Noch keine Webseiten ausgewählt.").foregroundStyle(.secondary)
                 }
-                if domainError {
-                    Text("Das sieht nicht nach einer gültigen Domain aus.").font(.caption).foregroundStyle(.red)
+                Button("Webseite hinzufügen…", systemImage: "plus") {
+                    addingDomain = true
+                    Analytics.track(.addDomainOpened)
                 }
             } header: {
                 Text("Webseiten")
@@ -121,6 +129,11 @@ private struct BlockingSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $addingDomain) {
+            AddDomainSheet { domain in
+                if !settings.blockedDomains.contains(domain) { settings.blockedDomains.append(domain) }
+            }
+        }
     }
 
     private var runningApps: [BlockedApp] {
@@ -152,15 +165,71 @@ private struct BlockingSettingsView: View {
         guard !settings.blockedApps.contains(where: { $0.bundleID == app.bundleID }) else { return }
         settings.blockedApps.append(app)
     }
+}
 
-    private func addDomain() {
-        guard let domain = DomainBlocker.normalize(newDomain) else {
-            domainError = true
+/// Asks for the address of a website to block and shows which domain that becomes.
+private struct AddDomainSheet: View {
+    let add: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var url = ""
+    @State private var showError = false
+    @FocusState private var focused: Bool
+
+    private var domain: String? { DomainBlocker.normalize(url) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Webseite blockieren").font(.headline)
+            Text("Gib die Adresse der Webseite ein. Du kannst auch einen Link aus dem Browser einfügen.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("URL").font(.caption).foregroundStyle(.secondary)
+                TextField("https://www.netflix.com", text: $url)
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.large)
+                    .focused($focused)
+                    .onSubmit(submit)
+                    .onChange(of: url) { showError = false }
+            }
+            Group {
+                if let domain {
+                    Label("Blockiert \(domain) und www.\(domain)", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                } else if showError {
+                    Label("Das ist keine gültige Adresse, z. B. netflix.com", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                } else {
+                    Text(" ")
+                }
+            }
+            .font(.caption)
+            HStack {
+                Spacer()
+                Button("Abbrechen", role: .cancel) {
+                    Analytics.track(.addDomainCancelled, ["had_text": .bool(!url.isEmpty)])
+                    dismiss()
+                }
+                    .keyboardShortcut(.cancelAction)
+                Button("Hinzufügen", action: submit)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(url.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 400)
+        .onAppear { focused = true }
+    }
+
+    private func submit() {
+        guard let domain else {
+            showError = true
+            Analytics.track(.addDomainInvalid, content: ["text": url])
             return
         }
-        domainError = false
-        if !settings.blockedDomains.contains(domain) { settings.blockedDomains.append(domain) }
-        newDomain = ""
+        add(domain)
+        dismiss()
     }
 }
 
@@ -179,7 +248,8 @@ private struct AppIcon: View {
 }
 
 private struct GeneralSettingsView: View {
-    let aiStatus: AIStatus
+    @State private var loggingEnabled = Analytics.settings.enabled
+    @State private var logSize = LocalFileSink.totalSize
 
     var body: some View {
         Form {
@@ -189,19 +259,36 @@ private struct GeneralSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Apple Intelligence") {
-                switch aiStatus {
-                case .available:
-                    Label("Aktiv: Notizen werden mit dem Apple Foundation Model aufbereitet.", systemImage: "sparkles")
-                        .foregroundStyle(.purple)
-                case .unavailable(let reason):
-                    Label(reason, systemImage: "exclamationmark.circle")
-                    Text("Bis dahin übernimmt FocusFlow deine Notiz als Todo und schätzt die Dauer anhand von Stichworten. Angaben wie „30 min“ oder „2h“ in der Notiz werden immer übernommen.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+
+            Section {
+                Toggle("Nutzung protokollieren", isOn: $loggingEnabled)
+                    .onChange(of: loggingEnabled) {
+                        // Log the switch itself while logging is still on.
+                        if !loggingEnabled { Analytics.track(.settingChanged, ["setting": "logging.enabled", "old_value": true, "new_value": false]) }
+                        Analytics.settings.enabled = loggingEnabled
+                        if loggingEnabled { Analytics.track(.settingChanged, ["setting": "logging.enabled", "old_value": false, "new_value": true]) }
+                    }
+                LabeledContent("Gespeichert", value: ByteCountFormatter.string(fromByteCount: logSize, countStyle: .file))
+                HStack {
+                    Button("Im Finder zeigen") { NSWorkspace.shared.open(LocalFileSink.directory) }
+                    Button("Protokoll löschen", role: .destructive) {
+                        Analytics.flush()
+                        LocalFileSink.deleteAll()
+                        logSize = LocalFileSink.totalSize
+                    }
                 }
+            } header: {
+                Text("Protokoll")
+            } footer: {
+                Text("Speichert jede Bedienung mit Zeitpunkt auf diesem Mac, damit wir die App anhand echter Nutzung verbessern können. Nichts verlässt deinen Mac. Texte wie Notizen und Todo-Titel stehen getrennt im Feld „content“, damit sie beim späteren Teilen weggelassen werden können.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            Analytics.flush()
+            logSize = LocalFileSink.totalSize
+        }
     }
 }

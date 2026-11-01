@@ -21,6 +21,7 @@ struct StatsView: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .fixedSize()
+                    .onChange(of: range) { Analytics.track(.statsRangeChanged, ["days": .int(range)]) }
                 }
 
                 tiles(days: days, goal: goal)

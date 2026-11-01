@@ -43,7 +43,7 @@ struct BreakView: View {
                     .font(.headline)
                     .monospacedDigit()
                 Spacer()
-                Button { state.panels.hideBreak() } label: {
+                Button { state.panels.dismissBreak() } label: {
                     Image(systemName: "xmark").font(.caption.weight(.bold))
                 }
                 .buttonStyle(.plain)

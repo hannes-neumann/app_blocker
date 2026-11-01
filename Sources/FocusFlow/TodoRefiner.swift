@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -15,10 +16,10 @@ enum AIStatus: Equatable {
     var isAvailable: Bool { self == .available }
 }
 
-/// Turns a quick note into concrete todos with a duration estimate.
-/// Uses Apple's on-device Foundation Model when available and a keyword heuristic otherwise.
+/// Turns a quick note into concrete todos with a duration estimate, with a language model
+/// (see `AIEngine`) or a keyword heuristic.
 enum TodoRefiner {
-    static var status: AIStatus {
+    static var appleStatus: AIStatus {
         #if canImport(FoundationModels)
         if #available(macOS 26, *) {
             switch SystemLanguageModel.default.availability {
@@ -38,46 +39,116 @@ enum TodoRefiner {
         return .unavailable("Benötigt macOS 26 mit Apple Intelligence.")
     }
 
-    static func refine(_ note: String) async -> (todos: [RefinedTodo], usedAI: Bool) {
-        let explicit = explicitMinutes(in: note)
-        #if canImport(FoundationModels)
-        if #available(macOS 26, *), status.isAvailable,
-           var todos = try? await refineWithModel(note), !todos.isEmpty {
-            // A duration the user typed themselves beats the model's guess.
-            if let explicit, todos.count == 1 { todos[0].minutes = explicit }
-            return (todos.map { RefinedTodo(title: $0.title, minutes: clamp($0.minutes)) }, true)
-        }
-        #endif
-        return ([heuristic(note, explicit: explicit)], false)
-    }
-
-    #if canImport(FoundationModels)
-    private static let instructions = """
+    static let instructions = """
         Du verwandelst kurze, spontan notierte Gedanken in konkrete, umsetzbare Todos.
         Regeln:
         - Jedes Todo ist ein klarer nächster Schritt und beginnt mit einem Verb (z. B. "Anna wegen Termin anrufen").
-        - Behalte die Sprache der Notiz bei.
-        - Enthält die Notiz mehrere Aufgaben, gib mehrere Todos zurück. Erfinde keine zusätzlichen Aufgaben.
-        - Schätze realistisch, wie viele Minuten die Aufgabe dauert (ganze Zahl zwischen 1 und 480).
-        - Antworte ausschließlich mit einem JSON-Array ohne weiteren Text, z. B.:
-          [{"title": "Rechnung an Kunde X schicken", "minutes": 5}]
+        - Schreibe die Todos in der Sprache, die in der Anfrage genannt ist, und mische keine Sprachen.
+        - Ein Todo pro Aufgabe, die in der Notiz steht. Mehrere Todos nur, wenn die Notiz ausdrücklich mehrere
+          Aufgaben nennt (z. B. mit "und" oder Kommas). Zerlege eine einzelne Aufgabe nicht in Unterschritte.
+        - Verwende nur, was in der Notiz steht. Erfinde keine Namen, Personen, Orte, Adressen oder Details.
+        - Der Titel beschreibt dieselbe Aufgabe wie die Notiz, nur klarer formuliert. Ersetze sie nicht durch
+          einen anderen Schritt (aus "Flug buchen" wird "Flug nach Berlin buchen", nicht "Flugpreise vergleichen").
+        - Zerlege jede Aufgabe gedanklich in 2 bis 5 kleine Arbeitsschritte und schätze für jeden Schritt,
+          wie viele Minuten eine geübte Person realistisch braucht. Sei genau, runde nicht auf 5er-Schritte.
+          Rechne Wege, Warten und Vorbereitung mit ein. Bei großen Aufgaben (Präsentation, Kapitel überarbeiten,
+          Feature bauen) dauern einzelne Schritte oft 20 bis 60 Minuten, bei kleinen (Mail, Anruf) nur 1 bis 5.
+        - Antworte ausschließlich mit JSON ohne weiteren Text, z. B.:
+          {"todos": [{"name": "Rechnung an Kunde X schicken", "parts": [
+            {"description": "Rechnung im Ordner suchen", "minutes": 2},
+            {"description": "Mail mit Anhang schreiben", "minutes": 3},
+            {"description": "Abschicken und ablegen", "minutes": 1}]}]}
         """
 
-    @available(macOS 26, *)
-    private static func refineWithModel(_ note: String) async throws -> [RefinedTodo]? {
-        let session = LanguageModelSession(instructions: instructions)
-        let response = try await session.respond(
-            to: "Notiz: \(note)",
-            options: GenerationOptions(temperature: 0.2)
-        )
-        return parse(response.content)
+    // Keys are sent sorted (see OllamaClient), and constrained decoding writes them in that order, so they are
+    // named such that the model writes a step's description before its minutes and the name before the parts.
+    static let schema: [String: Any] = [
+        "type": "object",
+        "properties": [
+            "todos": [
+                "type": "array",
+                "items": [
+                    "type": "object",
+                    "properties": [
+                        "name": ["type": "string"],
+                        "parts": [
+                            "type": "array",
+                            "items": [
+                                "type": "object",
+                                "properties": [
+                                    "description": ["type": "string"],
+                                    "minutes": ["type": "integer", "minimum": 1, "maximum": 240],
+                                ],
+                                "required": ["description", "minutes"],
+                            ],
+                        ],
+                    ],
+                    "required": ["name", "parts"],
+                ],
+            ],
+        ],
+        "required": ["todos"],
+    ]
+
+    static func refineWithApple(_ note: String) async -> [RefinedTodo]? {
+        #if canImport(FoundationModels)
+        if #available(macOS 26, *) {
+            let session = LanguageModelSession(instructions: instructions)
+            guard let response = try? await session.respond(to: prompt(for: note), options: GenerationOptions(temperature: 0))
+            else { return nil }
+            return finish(parse(response.content), note: note)
+        }
+        #endif
+        return nil
     }
-    #endif
+
+    static func refineWithOllama(_ note: String, client: OllamaClient) async -> [RefinedTodo]? {
+        // One retry: the first request after a while has to load the model, which can fail on a busy Mac.
+        var text = try? await client.chat(system: instructions, user: prompt(for: note), schema: schema, temperature: 0)
+        if text == nil { text = try? await client.chat(system: instructions, user: prompt(for: note), schema: schema, temperature: 0) }
+        guard let text else { return nil }
+        return finish(parse(text), note: note)
+    }
+
+    /// Names the note's language explicitly: small models otherwise answer in the language of the instructions.
+    static func prompt(for note: String) -> String {
+        // Short notes often mix in English terms ("PR reviewen"), so only a clear English note counts as English.
+        let recognizer = NLLanguageRecognizer()
+        recognizer.languageConstraints = [.german, .english]
+        recognizer.processString(note)
+        let english = (recognizer.languageHypotheses(withMaximum: 2)[.english] ?? 0) > 0.75
+        // Small models follow the language of the request more than an instruction naming it.
+        return english
+            ? "Write the todo names and parts in natural English, not German, starting with the verb (e.g. \"Call Anna about the meeting\").\nNote: \(note)"
+            : "Schreibe die Todos auf Deutsch.\nNotiz: \(note)"
+    }
+
+    /// Clamps the model's estimates. A duration the user typed themselves beats the model's guess.
+    private static func finish(_ todos: [RefinedTodo]?, note: String) -> [RefinedTodo]? {
+        guard var todos, !todos.isEmpty else { return nil }
+        if let explicit = explicitMinutes(in: note), todos.count == 1 { todos[0].minutes = explicit }
+        return todos.map { RefinedTodo(title: $0.title, minutes: clamp($0.minutes)) }
+    }
+
+    /// The model's answer. The estimate is the sum of the steps, which comes out more precise than
+    /// asking for a single number (small models pick round or example values for that).
+    private struct Answer: Decodable {
+        struct Item: Decodable {
+            struct Part: Decodable { let minutes: Int }
+            let name: String
+            let parts: [Part]
+        }
+        let todos: [Item]
+    }
 
     static func parse(_ text: String) -> [RefinedTodo]? {
-        guard let start = text.firstIndex(of: "["), let end = text.lastIndex(of: "]"), start < end else { return nil }
-        let todos = try? JSONDecoder().decode([RefinedTodo].self, from: Data(text[start...end].utf8))
-        return todos?.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"), start < end,
+              let answer = try? JSONDecoder().decode(Answer.self, from: Data(text[start...end].utf8)) else { return nil }
+        return answer.todos.compactMap { item in
+            let title = item.name.trimmingCharacters(in: .whitespaces)
+            let minutes = item.parts.reduce(0) { $0 + min(max($1.minutes, 0), 240) }
+            return title.isEmpty || minutes == 0 ? nil : RefinedTodo(title: title, minutes: minutes)
+        }
     }
 
     // MARK: - Fallback
@@ -91,7 +162,8 @@ enum TodoRefiner {
         (["entwurf", "konzept", "präsentation", "bericht", "artikel", "planen"], 45),
     ]
 
-    private static func heuristic(_ note: String, explicit: Int?) -> RefinedTodo {
+    static func heuristic(_ note: String) -> RefinedTodo {
+        let explicit = explicitMinutes(in: note)
         // Drop a typed duration like "(20 min)" from the title; it already becomes the estimate.
         let withoutDuration = note
             .replacingOccurrences(of: #"\(?\s*\d+\s*(minuten|minutes|min|m|stunden|std|hours|h)\b\s*\)?"#,
