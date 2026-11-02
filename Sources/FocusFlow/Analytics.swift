@@ -139,10 +139,15 @@ protocol AnalyticsSink: AnyObject {
 }
 
 /// Appends events as JSON lines to one file per day in `Logs/` of the app's storage folder.
+///
+/// Finished days are gzipped. The folder stays small through three limits: files older than
+/// `retentionDays` are deleted, one day stops growing at `maxDayBytes`, and the oldest days are deleted
+/// once all files together exceed `maxTotalBytes`. This runs on launch and at every day change.
 final class LocalFileSink: AnalyticsSink {
     static let directory = Storage.directory.appendingPathComponent("Logs", isDirectory: true)
-    /// Older files are deleted on launch.
     static let retentionDays = 180
+    static let maxDayBytes: Int64 = 10 * 1_024 * 1_024
+    static let maxTotalBytes: Int64 = 50 * 1_024 * 1_024
 
     private let queue = DispatchQueue(label: "FocusFlow.analytics")
     private let encoder: JSONEncoder = {
@@ -157,17 +162,26 @@ final class LocalFileSink: AnalyticsSink {
         f.dateFormat = "yyyy-MM-dd"
         return f
     }()
+    // Only touched on `queue`.
+    private var currentDay: String?
+    private var currentDayBytes: Int64 = 0
 
     init() {
         try? FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
-        queue.async { Self.deleteOldFiles() }
     }
 
     func record(_ event: AnalyticsEvent) {
         guard var line = try? encoder.encode(event) else { return }
         line.append(0x0A)
-        let url = Self.directory.appendingPathComponent("events-\(dayFormatter.string(from: event.timestamp)).jsonl")
-        queue.async {
+        let day = dayFormatter.string(from: event.timestamp)
+        queue.async { [self] in
+            let url = Self.directory.appendingPathComponent("events-\(day).jsonl")
+            if day != currentDay {
+                currentDay = day
+                currentDayBytes = Self.size(of: url)
+                Self.maintain(keeping: url)
+            }
+            guard currentDayBytes + Int64(line.count) <= Self.maxDayBytes else { return }
             if let handle = try? FileHandle(forWritingTo: url) {
                 defer { try? handle.close() }
                 _ = try? handle.seekToEnd()
@@ -175,6 +189,7 @@ final class LocalFileSink: AnalyticsSink {
             } else {
                 try? line.write(to: url)
             }
+            currentDayBytes += Int64(line.count)
         }
     }
 
@@ -182,26 +197,52 @@ final class LocalFileSink: AnalyticsSink {
         queue.sync {}
     }
 
+    /// Daily log files, oldest first: `events-YYYY-MM-DD.jsonl`, or `.jsonl.gz` once the day is over.
     static var files: [URL] {
         ((try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey])) ?? [])
-            .filter { $0.lastPathComponent.hasPrefix("events-") && $0.pathExtension == "jsonl" }
+            .filter { $0.lastPathComponent.hasPrefix("events-") && ($0.pathExtension == "jsonl" || $0.lastPathComponent.hasSuffix(".jsonl.gz")) }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
     static var totalSize: Int64 {
-        files.reduce(0) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0) }
+        files.reduce(0) { $0 + size(of: $1) }
     }
 
     static func deleteAll() {
         files.forEach { try? FileManager.default.removeItem(at: $0) }
     }
 
-    private static func deleteOldFiles() {
-        let cutoff = Date().addingTimeInterval(-Double(retentionDays) * 86_400)
-        for url in files {
-            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-            if let modified, modified < cutoff { try? FileManager.default.removeItem(at: url) }
+    private static func size(of url: URL) -> Int64 {
+        Int64((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+    }
+
+    /// Compresses finished days, then applies the age and total size limits. `current` is today's file.
+    private static func maintain(keeping current: URL) {
+        for url in files where url.pathExtension == "jsonl" && url != current {
+            gzip(url)
         }
+        let cutoff = Date().addingTimeInterval(-Double(retentionDays) * 86_400)
+        var remaining = files
+        for url in remaining {
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            if let modified, modified < cutoff, url != current { try? FileManager.default.removeItem(at: url) }
+        }
+        remaining = files.filter { $0 != current }
+        var total = totalSize
+        while total > maxTotalBytes, let oldest = remaining.first {
+            total -= size(of: oldest)
+            try? FileManager.default.removeItem(at: oldest)
+            remaining.removeFirst()
+        }
+    }
+
+    /// Replaces `url` with `url.gz`, readable with `zcat` or `gzip -d`.
+    private static func gzip(_ url: URL) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
+        process.arguments = ["-f", "-9", url.path]
+        try? process.run()
+        process.waitUntilExit()
     }
 }
 
