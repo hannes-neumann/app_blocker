@@ -251,6 +251,7 @@ struct ProjectDetailPage: View {
                     }
                     .card()
                 }
+                TrackingRulesCard(project: project)
                 VStack(alignment: .leading, spacing: 12) {
                     CardHeader(title: L10n.text("blockingForProject"), subtitle: L10n.text("blockingForProjectHint"))
                     AppOverrideEditor(value: project.blockedApps) { state.projects.setBlockedApps($0, for: project.id) }

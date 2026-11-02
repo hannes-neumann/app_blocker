@@ -40,6 +40,8 @@ struct Project: Codable, Identifiable, Equatable {
     var symbol = "folder.fill"
     /// Optional focus target per week.
     var weeklyGoalMinutes: Int?
+    /// Which tracked activity counts for this project.
+    var trackingRules: [TrackingRule] = []
 
     init(name: String, colorIndex: Int = 0, symbol: String = "folder.fill") {
         self.name = name
@@ -58,6 +60,7 @@ struct Project: Codable, Identifiable, Equatable {
         colorIndex = try c.decodeIfPresent(Int.self, forKey: .colorIndex) ?? -1
         symbol = try c.decodeIfPresent(String.self, forKey: .symbol) ?? "folder.fill"
         weeklyGoalMinutes = try c.decodeIfPresent(Int.self, forKey: .weeklyGoalMinutes)
+        trackingRules = try c.decodeIfPresent([TrackingRule].self, forKey: .trackingRules) ?? []
     }
 }
 

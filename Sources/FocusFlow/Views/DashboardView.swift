@@ -168,6 +168,7 @@ private struct OverviewPage: View {
                     .card()
                     .frame(width: 320)
                 }
+                TrackedTodayCard()
                 HStack(alignment: .top, spacing: 18) {
                     TodaySessionsCard()
                     UpNextCard()
@@ -347,7 +348,11 @@ private struct TodaySessionsCard: View {
             if sessions.isEmpty {
                 EmptyHint(symbol: "timer", text: L10n.text("noSessionsToday"))
             } else {
-                DayTimeline(records: sessions)
+                DayTimeline(spans: sessions.map { record in
+                    let project = state.projects.project(record.projectID)
+                    return TimelineSpan(id: record.id, start: record.start, end: record.end,
+                                        color: project?.color ?? ProjectPalette.none, help: project?.name ?? L10n.text("noProject"))
+                })
                 VStack(spacing: 0) {
                     ForEach(sessions.prefix(6)) { record in
                         SessionRow(record: record)
@@ -360,14 +365,22 @@ private struct TodaySessionsCard: View {
     }
 }
 
-/// Today's sessions as colored blocks on a time axis.
-private struct DayTimeline: View {
-    @Environment(AppState.self) private var state
-    let records: [FocusRecord]
+/// One colored span on a `DayTimeline`.
+struct TimelineSpan: Identifiable {
+    let id: UUID
+    let start: Date
+    let end: Date
+    let color: Color
+    let help: String
+}
+
+/// Today's sessions or tracked activity as colored blocks on a time axis.
+struct DayTimeline: View {
+    let spans: [TimelineSpan]
 
     var body: some View {
         let calendar = Calendar.current
-        let hours = records.flatMap { [calendar.component(.hour, from: $0.start), calendar.component(.hour, from: $0.end)] }
+        let hours = spans.flatMap { [calendar.component(.hour, from: $0.start), calendar.component(.hour, from: $0.end)] }
         let first = max(0, min(hours.min() ?? 8, 8))
         let last = min(24, max((hours.max() ?? 18) + 1, 18))
         let dayStart = calendar.startOfDay(for: Date())
@@ -376,14 +389,14 @@ private struct DayTimeline: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.05))
-                    ForEach(records) { record in
-                        let offset = record.start.timeIntervalSince(dayStart) - Double(first) * 3600
-                        let width = max(record.end.timeIntervalSince(record.start), 60)
+                    ForEach(spans) { item in
+                        let offset = item.start.timeIntervalSince(dayStart) - Double(first) * 3600
+                        let width = max(item.end.timeIntervalSince(item.start), 60)
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(state.projects.project(record.projectID)?.color ?? ProjectPalette.none)
+                            .fill(item.color)
                             .frame(width: max(3, geo.size.width * width / span))
                             .offset(x: geo.size.width * offset / span)
-                            .help(state.projects.project(record.projectID)?.name ?? L10n.text("noProject"))
+                            .help(item.help)
                     }
                 }
             }

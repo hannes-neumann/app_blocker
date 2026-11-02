@@ -66,6 +66,25 @@ final class ProjectStore {
                                                      "bundle_ids": .string(apps?.map(\.bundleID).joined(separator: ",") ?? "")])
     }
 
+    func addRule(_ rule: TrackingRule, to id: UUID) {
+        guard let index = projects.firstIndex(where: { $0.id == id }),
+              !projects[index].trackingRules.contains(where: { $0.kind == rule.kind && $0.value == rule.value }) else { return }
+        projects[index].trackingRules.append(rule)
+        save()
+        Analytics.track(.trackingRuleAdded, ["project_id": .string(id.uuidString), "kind": .string(rule.kind.rawValue),
+                                             "count": .int(projects[index].trackingRules.count)],
+                        content: ["value": rule.value])
+    }
+
+    func removeRule(_ ruleID: UUID, from id: UUID) {
+        guard let index = projects.firstIndex(where: { $0.id == id }),
+              let rule = projects[index].trackingRules.first(where: { $0.id == ruleID }) else { return }
+        projects[index].trackingRules.removeAll { $0.id == ruleID }
+        save()
+        Analytics.track(.trackingRuleRemoved, ["project_id": .string(id.uuidString), "kind": .string(rule.kind.rawValue)],
+                        content: ["value": rule.value])
+    }
+
     func delete(_ id: UUID) {
         projects.removeAll { $0.id == id }
         save()

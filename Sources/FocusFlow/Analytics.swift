@@ -97,6 +97,12 @@ enum AnalyticsEventName: String, Codable {
     case focusProjectSelected = "focus_project_selected"
     case sessionProjectChanged = "session_project_changed"
     case projectOpened = "project_opened"
+    // Automatic time tracking
+    case trackingPermissionRequested = "tracking_permission_requested"
+    case trackingRuleAdded = "tracking_rule_added"
+    case trackingRuleRemoved = "tracking_rule_removed"
+    case trackedBlockAssigned = "tracked_block_assigned"
+    case trackedDataDeleted = "tracked_data_deleted"
     // Settings & blocking
     case settingChanged = "setting_changed"
     case blockedAppAdded = "blocked_app_added"

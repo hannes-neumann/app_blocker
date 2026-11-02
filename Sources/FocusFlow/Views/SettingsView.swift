@@ -12,6 +12,7 @@ struct SettingsView: View {
                 Label(L10n.text("timer"), systemImage: "timer").tag(0)
                 Label(L10n.text("blocking"), systemImage: "hand.raised").tag(1)
                 Label(L10n.text("ai"), systemImage: "sparkles").tag(3)
+                Label(L10n.text("timeTracking"), systemImage: "eye").tag(4)
                 Label(L10n.text("general"), systemImage: "gearshape").tag(2)
             }
             .pickerStyle(.segmented)
@@ -19,13 +20,14 @@ struct SettingsView: View {
             .fixedSize()
             .padding(.top, 8)
             .onChange(of: tab, initial: true) {
-                Analytics.track(.settingsTabViewed, ["tab": .string([0: "timer", 1: "blocking", 2: "general", 3: "ai"][tab] ?? "\(tab)")])
+                Analytics.track(.settingsTabViewed, ["tab": .string([0: "timer", 1: "blocking", 2: "general", 3: "ai", 4: "tracking"][tab] ?? "\(tab)")])
             }
 
             switch tab {
             case 0: TimerSettingsView(settings: $state.settings)
             case 1: BlockingSettingsView(settings: $state.settings)
             case 3: AISettingsView(ai: state.ai)
+            case 4: TrackingSettingsView()
             default: GeneralSettingsView()
             }
         }

@@ -17,6 +17,7 @@ final class AppState {
     let projects = ProjectStore()
     let stats = StatsStore()
     let ai = AIEngine()
+    let activity = ActivityTracker()
 
     private(set) var phase: Phase = .idle
     private(set) var remaining: TimeInterval = 0
@@ -79,6 +80,7 @@ final class AppState {
         for todo in todos.todos where todo.projectID == id { todos.setProject(todo.id, projectID: nil) }
         stats.detachProject(id)
         projects.delete(id)
+        activity.detachProject(id, remaining: projects.projects)
     }
 
     var activeBlockedApps: [BlockedApp] {
@@ -130,6 +132,7 @@ final class AppState {
             "blocked_apps": .int(settings.blockedApps.count),
             "blocked_domains": .int(settings.blockDomains ? settings.blockedDomains.count : 0),
             "ai_provider": .string(ai.settings.provider.rawValue),
+            "tracking_enabled": .bool(activity.settings.enabled),
         ])
         refreshHelperStatus()
         syncDomains()
@@ -146,6 +149,22 @@ final class AppState {
             self?.showTimerEntry()
         }
         todos.resumePendingRefinements()
+        activity.context = { [weak self] in
+            guard let self else { return (nil, []) }
+            return (phase == .focus ? selectedProject?.id : nil, projects.projects)
+        }
+        activity.start()
+    }
+
+    /// Adds a rule and lets it sort the activity already recorded.
+    func addTrackingRule(_ rule: TrackingRule, to projectID: UUID) {
+        projects.addRule(rule, to: projectID)
+        activity.applyRules(projects.projects)
+    }
+
+    func removeTrackingRule(_ ruleID: UUID, from projectID: UUID) {
+        projects.removeRule(ruleID, from: projectID)
+        activity.applyRules(projects.projects)
     }
 
     func shutdown() {
@@ -153,6 +172,7 @@ final class AppState {
         Analytics.flushChanges()
         Analytics.track(.appQuit, ["session_seconds": .int(Int(Date().timeIntervalSince(Analytics.launchedAt)))])
         Analytics.flush()
+        activity.stop()
         appBlocker.stop()
         domainBlocker.setBlocking(false)
         ai.shutdown()
