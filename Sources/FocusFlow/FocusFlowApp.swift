@@ -19,8 +19,22 @@ struct FocusFlowApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let state = AppState()
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // focusflow:// links, e.g. from calendar events or the MCP server. Registered this early so a link
+        // that launches the app is not lost.
+        NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleURLEvent(_:reply:)),
+                                                     forEventClass: AEEventClass(kInternetEventClass),
+                                                     andEventID: AEEventID(kAEGetURL))
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         state.setup()
+    }
+
+    @objc private func handleURLEvent(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
+        guard let text = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+              let url = URL(string: text) else { return }
+        state.open(url)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

@@ -154,6 +154,10 @@ final class AppState {
             return (phase == .focus ? selectedProject?.id : nil, projects.projects)
         }
         activity.start()
+        ensureLinkToken()
+        isSetUp = true
+        pendingURLs.forEach(open)
+        pendingURLs = []
     }
 
     /// Adds a rule and lets it sort the activity already recorded.
@@ -165,6 +169,57 @@ final class AppState {
     func removeTrackingRule(_ ruleID: UUID, from projectID: UUID) {
         projects.removeRule(ruleID, from: projectID)
         activity.applyRules(projects.projects)
+    }
+
+    // MARK: - Links
+
+    /// Shared secret of the app and the MCP server. Links that change data must carry it, so a web page
+    /// cannot add or complete todos; starting a focus session is harmless and works without it.
+    static let linkTokenFile = Storage.directory.appendingPathComponent("mcp-token")
+    @ObservationIgnored private var pendingURLs: [URL] = []
+    @ObservationIgnored private var isSetUp = false
+
+    private func ensureLinkToken() {
+        guard !FileManager.default.fileExists(atPath: Self.linkTokenFile.path) else { return }
+        try? Data(UUID().uuidString.utf8).write(to: Self.linkTokenFile, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: Self.linkTokenFile.path)
+    }
+
+    /// Handles `focusflow://focus?task=…`, `focusflow://add-todo?…` and `focusflow://complete?task=…`.
+    func open(_ url: URL) {
+        guard isSetUp else { pendingURLs.append(url); return }
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        func value(_ name: String) -> String? { items.first { $0.name == name }?.value }
+        let command = url.host ?? ""
+        let token = (try? String(contentsOf: Self.linkTokenFile, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trusted = token != nil && value("token") == token
+        var handled = false
+        switch command {
+        case "focus":
+            guard phase == .idle else { break }
+            let minutes = value("minutes").flatMap(Int.init) ?? settings.focusMinutes
+            if let id = value("task").flatMap(UUID.init), todos.todos.contains(where: { $0.id == id }) {
+                startFocus(minutes: minutes, target: .task(id))
+            } else if let id = value("project").flatMap(UUID.init), projects.project(id) != nil {
+                startFocus(minutes: minutes, target: .project(id))
+            } else {
+                startFocus(minutes: minutes, target: .none)
+            }
+            handled = true
+        case "add-todo" where trusted:
+            guard let title = value("title") else { break }
+            todos.add(id: value("id").flatMap(UUID.init) ?? UUID(), title: title,
+                      estimatedMinutes: value("minutes").flatMap(Int.init),
+                      projectID: value("project").flatMap(UUID.init).flatMap { projects.project($0)?.id }, source: "link")
+            handled = true
+        case "complete" where trusted:
+            guard let id = value("task").flatMap(UUID.init), let todo = todos.todos.first(where: { $0.id == id }), !todo.isDone else { break }
+            todos.toggleDone(id, source: "link")
+            handled = true
+        default:
+            break
+        }
+        Analytics.track(.appLinkOpened, ["command": .string(command), "trusted": .bool(trusted), "handled": .bool(handled)])
     }
 
     func shutdown() {

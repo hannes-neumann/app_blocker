@@ -103,6 +103,8 @@ enum AnalyticsEventName: String, Codable {
     case trackingRuleRemoved = "tracking_rule_removed"
     case trackedBlockAssigned = "tracked_block_assigned"
     case trackedDataDeleted = "tracked_data_deleted"
+    // Links and Claude
+    case appLinkOpened = "app_link_opened"
     // Settings & blocking
     case settingChanged = "setting_changed"
     case blockedAppAdded = "blocked_app_added"

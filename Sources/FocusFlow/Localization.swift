@@ -349,5 +349,11 @@ enum L10n {
         , "trackSideWindowHint": [.german: "Ist hinter der vorderen App ein Fenster noch gut sichtbar, z. B. ein PDF neben dem Chat, zählen auch dessen Regeln. Die genauere Regel gewinnt.", .english: "If a window behind the front app is still clearly visible, e.g. a PDF next to a chat, its rules count too. The more specific rule wins."]
         , "targetSearchPlaceholder": [.german: "Projekt oder Aufgabe suchen…", .english: "Search project or task…"]
         , "noTargetMatch": [.german: "Nichts gefunden", .english: "No match"]
+        , "mcpServer": [.german: "MCP-Server", .english: "MCP server"]
+        , "copied": [.german: "Kopiert ✓", .english: "Copied ✓"]
+        , "copyForClaudeDesktop": [.german: "Für Claude Desktop kopieren", .english: "Copy for Claude Desktop"]
+        , "copyForClaudeCode": [.german: "Befehl für Claude Code kopieren", .english: "Copy command for Claude Code"]
+        , "mcpOnlyInApp": [.german: "Der MCP-Server ist nur in der gebauten App enthalten (scripts/build-app.sh).", .english: "The MCP server is only included in the built app (scripts/build-app.sh)."]
+        , "mcpFooter": [.german: "Damit kann Claude deine Todos und Projekte lesen, sie mit deinem Kalender zu Fokus-Blöcken einplanen und Todos anlegen, abhaken oder starten. Für Claude Desktop den kopierten Eintrag unter „mcpServers“ in claude_desktop_config.json einfügen und Claude neu starten.", .english: "Lets Claude read your todos and projects, plan them into focus blocks with your calendar, and add, complete or start todos. For Claude Desktop, paste the copied entry under “mcpServers” in claude_desktop_config.json and restart Claude."]
     ]
 }

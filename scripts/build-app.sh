@@ -10,6 +10,8 @@ APP=build/FocusFlow.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/FocusFlow" "$APP/Contents/MacOS/FocusFlow"
+# MCP server for Claude, see Settings → General → Claude.
+cp "$BIN_DIR/focusflow-mcp" "$APP/Contents/MacOS/focusflow-mcp"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 ICONSET="$(mktemp -d "${TMPDIR:-/tmp}/FocusFlowIcon.XXXXXX.iconset")"
 trap 'rm -rf "$ICONSET"' EXIT
@@ -20,6 +22,7 @@ for size in 16 32 128 256 512; do
     sips -z "$double" "$double" "$ICONSET/icon_1024x1024.png" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/FocusFlowIcon.icns"
+codesign --force --sign - "$APP/Contents/MacOS/focusflow-mcp" >/dev/null
 codesign --force --sign - "$APP" >/dev/null
 
 echo "Gebaut: $APP"

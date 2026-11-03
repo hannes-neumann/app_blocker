@@ -34,6 +34,18 @@ final class TodoStore {
                         content: ["title": text])
     }
 
+    /// Adds a finished todo directly, without refining, e.g. from Claude.
+    func add(id: UUID, title: String, estimatedMinutes: Int?, projectID: UUID?, source: String) {
+        let text = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !todos.contains(where: { $0.id == id }) else { return }
+        let todo = Todo(id: id, title: text, estimatedMinutes: estimatedMinutes, sourceNote: text, projectID: projectID)
+        todos.insert(todo, at: 0)
+        save()
+        Analytics.track(.taskAdded, ["todo_id": .string(id.uuidString), "project_id": .string(projectID?.uuidString ?? ""),
+                                     "estimated_minutes": .int(estimatedMinutes ?? 0), "source": .string(source)],
+                        content: ["title": text])
+    }
+
     func setProject(_ todoID: UUID, projectID: UUID?) {
         mutate(todoID) { $0.projectID = projectID }
         Analytics.track(.todoProjectChanged, ["todo_id": .string(todoID.uuidString),

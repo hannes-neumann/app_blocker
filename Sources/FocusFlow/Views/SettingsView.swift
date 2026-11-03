@@ -275,6 +275,8 @@ private struct GeneralSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            ClaudeSection()
+
             Section {
                 Toggle(L10n.text("logUsage"), isOn: $loggingEnabled)
                     .onChange(of: loggingEnabled) {
@@ -305,5 +307,49 @@ private struct GeneralSettingsView: View {
             Analytics.flush()
             logSize = LocalFileSink.totalSize
         }
+    }
+}
+
+/// How to connect Claude to FocusFlow's MCP server.
+private struct ClaudeSection: View {
+    @State private var copied: String?
+
+    private static let serverURL = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/focusflow-mcp")
+
+    var body: some View {
+        let path = Self.serverURL.path
+        let available = FileManager.default.isExecutableFile(atPath: path)
+        Section {
+            if available {
+                LabeledContent(L10n.text("mcpServer")) {
+                    Text(path).font(.caption.monospaced()).textSelection(.enabled).lineLimit(2).truncationMode(.middle)
+                }
+                HStack {
+                    Button(copied == "desktop" ? L10n.text("copied") : L10n.text("copyForClaudeDesktop")) {
+                        copy("desktop", """
+                        "focusflow": {
+                          "command": "\(path)"
+                        }
+                        """)
+                    }
+                    Button(copied == "code" ? L10n.text("copied") : L10n.text("copyForClaudeCode")) {
+                        copy("code", "claude mcp add --scope user focusflow -- \"\(path)\"")
+                    }
+                }
+            } else {
+                Text(L10n.text("mcpOnlyInApp")).foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Claude")
+        } footer: {
+            Text(L10n.text("mcpFooter")).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func copy(_ kind: String, _ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        copied = kind
+        Analytics.track(.settingChanged, ["setting": "mcp.config_copied", "old_value": "", "new_value": .string(kind)])
     }
 }

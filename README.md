@@ -10,11 +10,13 @@ passenden Pause vorgeschlagen werden.
 - **App-Blocker**: Ausgewählte Apps werden während der Fokuszeit beendet und beim erneuten Öffnen sofort wieder geschlossen.
 - **Webseiten-Blocker**: Domains werden systemweit über `/etc/hosts` gesperrt (gilt für alle Browser).
 - **Schnellnotiz** mit `⌃⌥N`: ein schwebendes Textfeld, egal in welcher App du gerade bist. Mit Enter speichern, mit Esc schließen.
-- **Timer-Shortcut** mit `⌃⌥T`: öffnet ein Eingabefenster für eine eigene Fokusdauer. Mit Enter oder einer Vorauswahl startet der Timer direkt.
+- **Timer-Shortcut** mit `⌃⌥T`: öffnet ein Eingabefenster für eine eigene Fokusdauer. Mit ↑↓ wählst du Projekt oder Aufgabe, mit ⇥ suchst du danach, mit Enter startet der Timer.
 - **KI-Aufbereitung**: Ein Sprachmodell auf deinem Mac (Apple Foundation Model oder ein Ollama-Modell) macht aus der Notiz ein oder mehrere konkrete Todos mit geschätzter Dauer.
 - **Pausenvorschlag**: Zu Beginn jeder Pause schlägt FocusFlow das längste offene Todo vor, das noch in die Pause passt.
 - **Dashboard**: ein eigenes Fenster mit Übersicht (Timer mit Projektwahl, Tagesziel, Wochenzahlen, Wochendiagramm nach Projekt, Insights, heutige Sessions, nächste Todos), Projekten, Todos, Insights und Einstellungen. Öffnest du es über „Dashboard“ im Menü.
 - **Projekte**: Projekte mit Farbe, Symbol und optionalem Wochenziel anlegen (Seitenleiste, Übersicht oder Menü). Vor dem Start wählst du ein Projekt und optional eine Aufgabe, die Session zählt dann für dieses Projekt. Sessions lassen sich nachträglich umhängen, z. B. in der Pause oder in der Session-Liste. Jede Projektseite zeigt Fokuszeit, Verlauf, Tageszeiten, Aufgaben mit Fokuszeit gegen Schätzung und eigene App-Sperrlisten. Regeln der Aufgabe überschreiben Projektregeln, ansonsten gilt die globale Regel.
+- **Automatische Zeiterfassung** (optional): erfasst die vordere App, das daneben sichtbare Fenster, Fenstertitel und Browser-Adressen und ordnet die Zeit über Regeln pro Projekt zu. Keine Bildschirmaufnahme, alles bleibt lokal.
+- **Claude-Anbindung (MCP)**: Claude kann deine Todos und Projekte lesen, sie mit deinem Kalender zu Fokus-Blöcken einplanen und Todos anlegen, abhaken oder starten. Siehe unten.
 - **Insights**: Fokuszeit pro Tag nach Projekt mit Tagesziel, Trend zum Zeitraum davor, Zeit nach Projekt, Tageszeiten, Wochentage, Schätzgenauigkeit, Fokuszeit pro Aufgabe und alle Sessions, für 7, 30 oder 90 Tage, dazu automatisch formulierte Auffälligkeiten. Im Menü steht eine Kurzübersicht für heute.
 
 ## Bauen und starten
@@ -45,6 +47,8 @@ Für die Entwicklung reicht auch `swift build`. Das fertige `.app`-Bundle brauch
 | Sprachen | `Localization.swift` (alle Texte auf Deutsch und Englisch) |
 | KI | `AIEngine.swift` (Auswahl des Modells), `OllamaClient.swift`, `TodoRefiner.swift` (Anweisungen, Stichwort-Schätzung) |
 | Protokoll | `Analytics.swift` (Events, `AnalyticsSink`, lokale Datei) |
+| Zeiterfassung | `ActivityTracker.swift`, `Views/TrackingViews.swift` |
+| Claude (MCP) | `Sources/FocusFlowMCP/main.swift`, Links `focusflow://` in `AppState.open(_:)` |
 
 **Webseiten-Sperre:** Beim ersten Fokus installiert FocusFlow einmalig einen kleinen Systemdienst
 (`/Library/LaunchDaemons/com.hannesneumann.FocusFlow.blocker.plist`). Dafür fragt macOS ein einziges Mal
@@ -84,6 +88,26 @@ cat ~/Library/Application\ Support/FocusFlow/Logs/*.jsonl | jq -s 'group_by(.nam
 Event-Namen und Schlüssel folgen den Regeln von Firebase Analytics (snake_case, höchstens 40 Zeichen). Für ein
 späteres Backend implementiert man `AnalyticsSink`, lässt dabei `content` weg, fragt die Nutzer vorher um
 Erlaubnis und hängt den Sink an `Analytics.sinks` an.
+
+## Claude-Anbindung (MCP)
+
+`scripts/build-app.sh` legt den MCP-Server `focusflow-mcp` in die App (`FocusFlow.app/Contents/MacOS/focusflow-mcp`). Unter Einstellungen → Allgemein → Claude kopierst du die passende Konfiguration:
+
+- **Claude Desktop**: den Eintrag unter `mcpServers` in `~/Library/Application Support/Claude/claude_desktop_config.json` einfügen und Claude neu starten.
+- **Claude Code**: den kopierten Befehl `claude mcp add --scope user focusflow -- …` im Terminal ausführen.
+
+Werkzeuge:
+
+| Werkzeug | Was es tut |
+| --- | --- |
+| `get_planning_context` | offene Todos mit einzuplanender Zeit, Projekte mit Wochenziel, Pomodoro-Einstellungen, Schätzfaktor, beste Fokuszeiten |
+| `list_todos` | Todos, optional nach Projekt oder mit erledigten |
+| `plan_focus_blocks` | verteilt Todos auf freie Zeitfenster: nach Projekt gebündelt, in Pomodoros mit Pausen, lange Todos aufgeteilt. Liefert Titel, Beschreibung und einen Start-Link für jeden Kalendertermin. Legt selbst nichts an. |
+| `add_todo`, `complete_todo`, `start_focus` | ändern Todos oder starten eine Session über die laufende App |
+
+So planst du mit Claude: „Plan mir meine FocusFlow-Todos morgen in den Kalender.“ Claude liest den Kontext, holt die Termine aus dem Google-Kalender, rechnet die freien Zeiten aus, lässt `plan_focus_blocks` verteilen, zeigt dir den Plan und legt die Termine erst nach deinem OK an. Der Link im Termin (`focusflow://focus?task=…`) startet den Fokus direkt in FocusFlow.
+
+Der Server liest die Dateien der App nur. Änderungen schickt er über `focusflow://`-Links an die laufende App, damit sie die einzige Stelle bleibt, die schreibt. Links, die Daten ändern, brauchen das Token aus `mcp-token` im Datenordner, das nur dein Benutzer lesen kann. Ein Fokus-Link geht ohne Token.
 
 ## Bekannte Grenzen
 

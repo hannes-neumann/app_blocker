@@ -22,6 +22,17 @@
     <string>14.0</string>
     <key>LSUIElement</key>
     <true/>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.hannesneumann.FocusFlow</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>focusflow</string>
+            </array>
+        </dict>
+    </array>
     <key>NSAppleEventsUsageDescription</key>
     <string>FocusFlow liest die Adresse des aktiven Tabs, um Zeit automatisch deinen Projekten zuzuordnen. / FocusFlow reads the active tab’s address to assign time to your projects automatically.</string>
     <key>NSHighResolutionCapable</key>

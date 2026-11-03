@@ -15,6 +15,12 @@ let package = Package(
                 // for the app to launch on older systems.
                 .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "FoundationModels"]),
             ]
-        )
+        ),
+        // MCP server for Claude; build-app.sh puts it next to the app's binary.
+        .executableTarget(
+            name: "focusflow-mcp",
+            path: "Sources/FocusFlowMCP",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
     ]
 )
