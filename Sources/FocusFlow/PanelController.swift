@@ -91,14 +91,16 @@ final class PanelController {
         }
         Analytics.track(.timerEntryOpened)
         let close = { [timerPanel] in timerPanel.orderOut(nil) }
+        let initial: FocusTarget = state.selectedTaskID.map { .task($0) } ?? state.selectedProjectID.map { .project($0) } ?? .none
         timerPanel.setContent(TimerEntryView(
             defaultMinutes: state.settings.focusMinutes,
-            onStart: { [self] minutes in
+            initialTarget: initial,
+            onStart: { [self] minutes, target in
                 close()
-                state.startFocus(minutes: minutes)
+                state.startFocus(minutes: minutes, target: target)
             },
             onCancel: { Analytics.track(.timerEntryCancelled, ["via": "escape"]); close() }
-        ))
+        ).environment(state))
         timerPanel.position(verticalFraction: 0.3)
         timerPanel.makeKeyAndOrderFront(nil)
     }

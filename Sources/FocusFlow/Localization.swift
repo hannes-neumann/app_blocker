@@ -274,7 +274,7 @@ enum L10n {
         , "streakOneDay": [.german: "Serie: %d Tag", .english: "Streak: %d day"]
         , "task": [.german: "Aufgabe", .english: "Task"]
         , "thisWeek": [.german: "Diese Woche", .english: "This week"]
-        , "timerEntryFooter": [.german: "↩ starten · esc schließen · Eingaben wie 25 min, 1h oder 1:30", .english: "↩ start · esc close · input like 25 min, 1h or 1:30"]
+        , "timerEntryFooter": [.german: "↩ starten · ↑↓ Projekt oder Aufgabe wählen · ⇥ suchen · esc schließen · Dauer wie 25 min, 1h oder 1:30", .english: "↩ start · ↑↓ pick project or task · ⇥ search · esc close · duration like 25 min, 1h or 1:30"]
         , "timerShortcut": [.german: "Timer mit eigener Dauer", .english: "Timer with custom duration"]
         , "title": [.german: "Titel", .english: "Title"]
         , "todaysSessions": [.german: "Heutige Sessions", .english: "Today's sessions"]
@@ -347,5 +347,7 @@ enum L10n {
         , "visibleNextTo": [.german: "Daneben sichtbar:", .english: "Visible next to it:"]
         , "trackSideWindow": [.german: "Zweites sichtbares Fenster einbeziehen", .english: "Include the second visible window"]
         , "trackSideWindowHint": [.german: "Ist hinter der vorderen App ein Fenster noch gut sichtbar, z. B. ein PDF neben dem Chat, zählen auch dessen Regeln. Die genauere Regel gewinnt.", .english: "If a window behind the front app is still clearly visible, e.g. a PDF next to a chat, its rules count too. The more specific rule wins."]
+        , "targetSearchPlaceholder": [.german: "Projekt oder Aufgabe suchen…", .english: "Search project or task…"]
+        , "noTargetMatch": [.german: "Nichts gefunden", .english: "No match"]
     ]
 }

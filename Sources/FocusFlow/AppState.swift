@@ -182,8 +182,18 @@ final class AppState {
 
     func startFocus(source: String = "button") { begin(.focus, source: source) }
 
-    func startFocus(minutes: Int) {
+    func startFocus(minutes: Int, target: FocusTarget) {
         guard phase == .idle, minutes > 0 else { return }
+        switch target {
+        case .none:
+            selectedTaskID = nil
+            selectedProjectID = nil
+        case .project(let id):
+            selectedTaskID = nil
+            selectedProjectID = id
+        case .task(let id):
+            selectedTaskID = id
+        }
         begin(.focus, durationMinutes: minutes, source: "timer_entry")
     }
 
