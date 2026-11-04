@@ -17,6 +17,7 @@ final class AppState {
     let projects = ProjectStore()
     let stats = StatsStore()
     let ai = AIEngine()
+    let aiQueue = AIBatchQueue()
     let activity = ActivityTracker()
 
     private(set) var phase: Phase = .idle
@@ -124,6 +125,16 @@ final class AppState {
         panels = PanelController(state: self)
         ai.refreshStatus()
         todos.refiner = { [ai] note in await ai.refine(note) }
+        aiQueue.moment = { [weak self] in
+            guard let self, phase == .focus, !isPaused else { return .free }
+            return .focus(remaining: remaining)
+        }
+        aiQueue.session = { [ai] work in await ai.withModel(work) }
+        aiQueue.onBatchFinished = { [weak self] in
+            // Don't swap a suggestion the user is already looking at.
+            if self?.suggestion == nil { self?.refreshSuggestion() }
+        }
+        todos.enqueue = { [aiQueue] job in aiQueue.enqueue(kind: "note", job) }
         Analytics.start()
         Analytics.track(.appLaunched, [
             "os_version": .string(ProcessInfo.processInfo.operatingSystemVersionString),
@@ -334,6 +345,7 @@ final class AppState {
     /// Logs the end of the running phase and records focus time in the statistics.
     private func endPhase(reason: String) {
         guard phase != .idle else { return }
+        if phase == .focus && reason != "quit" { aiQueue.flush() }
         if !isPaused, let endDate { remaining = max(0, endDate.timeIntervalSinceNow) }
         let completed = reason == "completed" && remaining <= 0
         Analytics.track(phase == .focus ? .focusEnded : .breakEnded, [

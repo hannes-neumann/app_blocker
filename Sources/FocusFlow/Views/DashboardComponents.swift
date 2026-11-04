@@ -204,7 +204,7 @@ struct FocusTargetPicker: View {
     }
 
     private var taskMenu: some View {
-        let tasks = state.todos.open.filter { $0.projectID == state.selectedProject?.id && !$0.isRefining }
+        let tasks = state.todos.open.filter { $0.projectID == state.selectedProject?.id }
         return Menu {
             Button(L10n.text("noTask")) { state.selectedTaskID = nil }
             if !tasks.isEmpty { Divider() }

@@ -540,7 +540,6 @@ struct DashboardTodoRow: View {
                     .foregroundStyle(todo.isDone ? .green : .secondary)
             }
             .buttonStyle(.plain)
-            .disabled(todo.isRefining)
 
             VStack(alignment: .leading, spacing: 3) {
                 TextField(L10n.text("title"), text: $title, axis: .vertical)
@@ -548,7 +547,6 @@ struct DashboardTodoRow: View {
                     .strikethrough(todo.isDone)
                     .foregroundStyle(todo.isDone ? .secondary : .primary)
                     .focused($editing)
-                    .disabled(todo.isRefining)
                     .onSubmit(saveTitle)
                     .onChange(of: editing) { _, isEditing in if !isEditing { saveTitle() } }
                 Text(detail).font(.caption).foregroundStyle(.secondary)
@@ -556,16 +554,15 @@ struct DashboardTodoRow: View {
 
             Spacer(minLength: 8)
 
-            if showProject && !todo.isRefining { projectMenu }
+            if showProject { projectMenu }
             if todo.isRefining {
-                ProgressView().controlSize(.small)
-            } else {
-                if todo.refinedByAI {
-                    Image(systemName: "sparkles").foregroundStyle(.purple)
-                        .help(L10n.text("refinedByAI"))
-                }
-                EstimateControl(todo: todo)
+                Image(systemName: "hourglass").foregroundStyle(.secondary)
+                    .help(L10n.text("refinePending"))
+            } else if todo.refinedByAI {
+                Image(systemName: "sparkles").foregroundStyle(.purple)
+                    .help(L10n.text("refinedByAI"))
             }
+            EstimateControl(todo: todo)
             Button { state.todos.delete(todo.id, source: "dashboard") } label: {
                 Image(systemName: "trash").foregroundStyle(.secondary)
             }

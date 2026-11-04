@@ -9,19 +9,26 @@ final class TodoStore {
         ([TodoRefiner.heuristic(note)], false)
     }
 
+    /// Runs model work whenever it suits, at the latest by the next break.
+    @ObservationIgnored var enqueue: (@escaping @MainActor () async -> Void) -> Void = { job in
+        Task { await job() }
+    }
+
     var open: [Todo] { todos.filter { !$0.isDone } }
     var done: [Todo] { todos.filter(\.isDone).sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) } }
 
     func capture(_ note: String, source: String) {
         let text = note.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let placeholder = Todo(title: text, sourceNote: text, isRefining: true)
+        // The keyword guess stands in until the model gets to the note.
+        let guess = TodoRefiner.heuristic(text)
+        let placeholder = Todo(title: guess.title, estimatedMinutes: guess.minutes, sourceNote: text, isRefining: true)
         Analytics.track(.noteCaptured, ["source": .string(source), "note_id": .string(placeholder.id.uuidString),
                                         "length": .int(text.count), "open_todos": .int(open.count)],
                         content: ["note": text])
         todos.insert(placeholder, at: 0)
         save()
-        refine(placeholder)
+        refine(placeholder.id)
     }
 
     func addTask(title: String, projectID: UUID) {
@@ -60,22 +67,28 @@ final class TodoStore {
 
     /// Notes that were still being refined when the app quit.
     func resumePendingRefinements() {
-        todos.filter(\.isRefining).forEach(refine)
+        todos.filter(\.isRefining).forEach { refine($0.id) }
     }
 
-    private func refine(_ placeholder: Todo) {
-        Task {
+    private func refine(_ id: UUID) {
+        enqueue { [weak self] in
+            guard let self, let waiting = todos.first(where: { $0.id == id }), waiting.isRefining else { return }
             let started = Date()
-            let result = await refiner(placeholder.sourceNote)
-            guard let index = todos.firstIndex(where: { $0.id == placeholder.id }) else { return }
-            let refined = result.todos.map {
-                Todo(title: $0.title, estimatedMinutes: $0.minutes, sourceNote: placeholder.sourceNote,
-                     createdAt: placeholder.createdAt, refinedByAI: result.usedAI)
+            let result = await refiner(waiting.sourceNote)
+            // It may have been deleted, checked off or edited meanwhile; what the user did wins.
+            guard let index = todos.firstIndex(where: { $0.id == id }), todos[index].isRefining else { return }
+            let placeholder = todos[index]
+            // The first todo keeps the id, so a focus session already running on this note stays attached to it.
+            let refined = result.todos.enumerated().map { offset, item in
+                Todo(id: offset == 0 ? id : UUID(), title: item.title, estimatedMinutes: item.minutes,
+                     sourceNote: placeholder.sourceNote, createdAt: placeholder.createdAt, refinedByAI: result.usedAI,
+                     projectID: placeholder.projectID, blockedApps: placeholder.blockedApps)
             }
             Analytics.track(.noteRefined, [
                 "note_id": .string(placeholder.id.uuidString),
                 "used_ai": .bool(result.usedAI),
                 "duration_ms": .int(Int(Date().timeIntervalSince(started) * 1000)),
+                "waited_seconds": .int(Int(started.timeIntervalSince(placeholder.createdAt))),
                 "todo_count": .int(refined.count),
                 "todo_ids": .string(refined.map(\.id.uuidString).joined(separator: ",")),
                 "estimated_minutes": .string(refined.map { String($0.estimatedMinutes ?? 0) }.joined(separator: ",")),
@@ -86,7 +99,10 @@ final class TodoStore {
     }
 
     func toggleDone(_ id: UUID, source: String) {
-        mutate(id) { $0.completedAt = $0.isDone ? nil : Date() }
+        mutate(id) {
+            $0.completedAt = $0.isDone ? nil : Date()
+            $0.isRefining = false
+        }
         guard let todo = todos.first(where: { $0.id == id }) else { return }
         onCompletionChange?(todo)
         Analytics.track(todo.isDone ? .todoCompleted : .todoReopened, Self.properties(of: todo, ["source": .string(source)]))
@@ -95,7 +111,10 @@ final class TodoStore {
     /// `method` is how the user picked the value, e.g. "menu" or "typed".
     func setEstimate(_ id: UUID, minutes: Int, method: String) {
         guard let old = todos.first(where: { $0.id == id }) else { return }
-        mutate(id) { $0.estimatedMinutes = minutes }
+        mutate(id) {
+            $0.estimatedMinutes = minutes
+            $0.isRefining = false
+        }
         Analytics.track(.todoEstimateChanged, Self.properties(of: old, [
             "method": .string(method), "old_minutes": .int(old.estimatedMinutes ?? 0), "new_minutes": .int(minutes),
         ]))
@@ -103,8 +122,11 @@ final class TodoStore {
 
     func setTitle(_ id: UUID, title: String) {
         let text = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, let old = todos.first(where: { $0.id == id }) else { return }
-        mutate(id) { $0.title = text }
+        guard !text.isEmpty, let old = todos.first(where: { $0.id == id }), text != old.title else { return }
+        mutate(id) {
+            $0.title = text
+            $0.isRefining = false
+        }
         Analytics.track(.todoTitleChanged, Self.properties(of: old), content: ["old_title": old.title, "new_title": text])
     }
 

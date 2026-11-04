@@ -20,7 +20,7 @@ struct AISettings: Codable, Equatable {
     var provider = AIProvider.automatic
     var ollamaURL = "http://localhost:11434"
     var ollamaModel = "gemma3:4b"
-    /// Run a local `ollama serve` only while FocusFlow is open.
+    /// Run a local `ollama serve` only while something needs it.
     var startOllama = true
 
     init() {}
@@ -63,7 +63,7 @@ final class AIEngine {
             Analytics.trackChanges(in: "ai", from: oldValue, to: settings)
             if !settings.startOllama { stopOwnedOllama() }
             if settings.provider != oldValue.provider || settings.startOllama != oldValue.startOllama {
-                Task { await startOllamaIfNeeded() }
+                Task { await syncServer() }
             } else if settings.ollamaURL != oldValue.ollamaURL || settings.ollamaModel != oldValue.ollamaModel {
                 Task { await checkOllama() }
             }
@@ -76,6 +76,11 @@ final class AIEngine {
     private(set) var pullProgress: Double = 0
     /// The `ollama serve` FocusFlow started itself and stops again on quit.
     @ObservationIgnored private var ownedOllamaPID: pid_t?
+    /// Who needs the server right now: a batch, the settings page, a download. At zero it stops.
+    @ObservationIgnored private var serverHolds = 0
+    @ObservationIgnored private var starting: Task<Void, Never>?
+    /// Only a safety net if FocusFlow dies mid-batch; normally `withModel` frees the model right away.
+    @ObservationIgnored private var keepAlive: String? = "30s"
 
     static let ollamaExecutable: URL? = [
         "/opt/homebrew/bin/ollama", "/usr/local/bin/ollama", "/Applications/Ollama.app/Contents/Resources/ollama",
@@ -85,7 +90,7 @@ final class AIEngine {
 
     private var ollama: OllamaClient? {
         guard let url = URL(string: settings.ollamaURL), url.scheme != nil else { return nil }
-        return OllamaClient(baseURL: url, model: settings.ollamaModel)
+        return OllamaClient(baseURL: url, model: settings.ollamaModel, keepAlive: keepAlive)
     }
 
     /// The model new notes go to right now, for display.
@@ -111,28 +116,71 @@ final class AIEngine {
     func refreshStatus() {
         appleStatus = TodoRefiner.appleStatus
         adoptLeftoverOllama()
-        Task {
-            await startOllamaIfNeeded()
-            await checkOllama()
-        }
+        stopOwnedOllama()
+        Task { await checkOllama() }
     }
 
     func shutdown() {
         stopOwnedOllama()
     }
 
-    // MARK: - Running Ollama alongside the app
+    // MARK: - Running Ollama on demand
 
     private var wantsOllama: Bool {
         settings.provider == .ollama || (settings.provider == .automatic && !appleStatus.isAvailable)
     }
 
+    /// Runs `work` with the model available and frees its memory right after, without Ollama's 5 minutes of idling.
+    func withModel(_ work: @MainActor () async -> Void) async {
+        guard wantsOllama else { await work(); return }
+        await holdServer()
+        // A model that was loaded before the batch is someone else's, so it stays and keeps its own timeout.
+        var isShared = false
+        if ollamaStatus.isReady, let loaded = try? await ollama?.loadedModels() {
+            isShared = Self.contains(loaded, settings.ollamaModel)
+        }
+        keepAlive = isShared ? nil : "30s"
+        await work()
+        if ollamaStatus.isReady && !isShared { try? await ollama?.unload() }
+        keepAlive = "30s"
+        releaseServer()
+    }
+
+    func holdServer() async {
+        serverHolds += 1
+        await startOllamaIfNeeded()
+        await checkOllama()
+    }
+
+    func releaseServer() {
+        serverHolds = max(serverHolds - 1, 0)
+        guard serverHolds == 0, ownedOllamaPID != nil else { return }
+        stopOwnedOllama()
+        ollamaStatus = .unknown
+    }
+
+    private func syncServer() async {
+        if serverHolds > 0 { await startOllamaIfNeeded() }
+        await checkOllama()
+    }
+
+    private func startOllamaIfNeeded() async {
+        if let starting {
+            await starting.value
+            return
+        }
+        let task = Task { await launchOllama() }
+        starting = task
+        await task.value
+        starting = nil
+    }
+
     /// Starts `ollama serve` unless one is already running (for example the Ollama app).
-    func startOllamaIfNeeded() async {
+    private func launchOllama() async {
         guard settings.startOllama, wantsOllama, ownedOllamaPID == nil, let exe = Self.ollamaExecutable,
               let url = URL(string: settings.ollamaURL), ["localhost", "127.0.0.1"].contains(url.host) else { return }
         await checkOllama()
-        guard ollamaStatus == .notRunning else { return }
+        guard ollamaStatus == .notRunning, serverHolds > 0 else { return }
 
         let process = Process()
         process.executableURL = exe
@@ -153,6 +201,7 @@ final class AIEngine {
         // The server needs a moment before it answers.
         for _ in 0..<40 {
             try? await Task.sleep(for: .milliseconds(250))
+            guard ownedOllamaPID != nil else { return }
             await checkOllama()
             if ollamaStatus != .notRunning { break }
         }
@@ -200,6 +249,7 @@ final class AIEngine {
         pullProgress = 0
         let model = settings.ollamaModel, started = Date()
         Analytics.track(.modelPullStarted, ["model": .string(model)])
+        serverHolds += 1
         Task {
             do {
                 try await ollama.pull { [weak self] in self?.pullProgress = $0 }
@@ -211,15 +261,11 @@ final class AIEngine {
                                                  "duration_seconds": .int(Int(Date().timeIntervalSince(started)))])
             ollamaStatus = .unknown
             await checkOllama()
+            releaseServer()
         }
     }
 
     func refine(_ note: String) async -> (todos: [RefinedTodo], usedAI: Bool) {
-        // Ollama may have been started since the last check.
-        if !ollamaStatus.isReady && wantsOllama {
-            await startOllamaIfNeeded()
-            await checkOllama()
-        }
         let provider = effectiveProvider, started = Date()
         var todos: [RefinedTodo]?
         switch provider {

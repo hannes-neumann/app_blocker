@@ -4,6 +4,8 @@ import Foundation
 struct OllamaClient {
     var baseURL: URL
     var model: String
+    /// How long Ollama keeps the model in memory after a chat turn, e.g. "30s". nil is Ollama's default of 5 minutes.
+    var keepAlive: String?
 
     struct Failure: LocalizedError {
         let message: String
@@ -22,13 +24,36 @@ struct OllamaClient {
         return tags.models.map(\.name).sorted()
     }
 
+    /// Names of the models that are in memory right now.
+    func loadedModels() async throws -> [String] {
+        struct Running: Decodable {
+            struct Model: Decodable { let name: String }
+            let models: [Model]
+        }
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/ps"))
+        request.timeoutInterval = 3
+        let running: Running = try await send(request)
+        return running.models.map(\.name)
+    }
+
+    /// Frees the model's memory right away.
+    func unload() async throws {
+        struct Reply: Decodable {}
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/generate"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["model": model, "keep_alive": 0] as [String: Any])
+        request.timeoutInterval = 10
+        let _: Reply = try await send(request)
+    }
+
     /// One chat turn. `schema` is a JSON schema the answer is constrained to.
     func chat(system: String, user: String, schema: [String: Any], temperature: Double = 0.2) async throws -> String {
         struct Reply: Decodable {
             struct Message: Decodable { let content: String }
             let message: Message
         }
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": model,
             "stream": false,
             "format": schema,
@@ -38,6 +63,7 @@ struct OllamaClient {
                 ["role": "user", "content": user],
             ],
         ]
+        if let keepAlive { body["keep_alive"] = keepAlive }
         var request = URLRequest(url: baseURL.appendingPathComponent("api/chat"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

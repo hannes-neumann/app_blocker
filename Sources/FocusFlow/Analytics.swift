@@ -119,6 +119,7 @@ enum AnalyticsEventName: String, Codable {
     case staleBlockRemoved = "stale_block_removed"
     // AI
     case aiRequest = "ai_request"
+    case aiBatchFinished = "ai_batch_finished"
     case ollamaStarted = "ollama_started"
     case modelPullStarted = "model_pull_started"
     case modelPullFinished = "model_pull_finished"

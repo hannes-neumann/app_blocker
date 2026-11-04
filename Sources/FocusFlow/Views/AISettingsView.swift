@@ -41,7 +41,9 @@ struct AISettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .task { await ai.checkOllama() }
+        // The model list and the status need the server, which otherwise only runs for a batch.
+        .onAppear { Task { await ai.holdServer() } }
+        .onDisappear { ai.releaseServer() }
     }
 
     @ViewBuilder

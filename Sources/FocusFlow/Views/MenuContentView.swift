@@ -215,7 +215,6 @@ struct TodoRow: View {
                     .foregroundStyle(todo.isDone ? .green : .secondary)
             }
             .buttonStyle(.plain)
-            .disabled(todo.isRefining)
 
             // Tooltips don't show while a menu-bar app is inactive, so a click reveals the full text instead.
             VStack(alignment: .leading, spacing: 2) {
@@ -237,16 +236,17 @@ struct TodoRow: View {
             Spacer(minLength: 4)
 
             if todo.isRefining {
-                ProgressView().controlSize(.small)
-            } else {
-                if todo.refinedByAI {
-                    Image(systemName: "sparkles")
-                        .font(.caption)
-                        .foregroundStyle(.purple)
-                        .help(L10n.text("refinedByAI"))
-                }
-                EstimateControl(todo: todo)
+                Image(systemName: "hourglass")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help(L10n.text("refinePending"))
+            } else if todo.refinedByAI {
+                Image(systemName: "sparkles")
+                    .font(.caption)
+                    .foregroundStyle(.purple)
+                    .help(L10n.text("refinedByAI"))
             }
+            EstimateControl(todo: todo)
 
             // Always laid out and only faded in, so hovering never changes the row's size
             // (which would make the whole menu window jump).

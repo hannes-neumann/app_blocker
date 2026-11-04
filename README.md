@@ -45,7 +45,7 @@ Für die Entwicklung reicht auch `swift build`. Das fertige `.app`-Bundle brauch
 | Insights | `StatsStore.swift`, `Insights.swift` (Auswertungen), `Views/StatsView.swift` (Swift Charts) |
 | Dashboard | `Views/DashboardView.swift`, `Views/ProjectsView.swift`, `Views/DashboardComponents.swift`, `ProjectStyle.swift` (Projektfarben) |
 | Sprachen | `Localization.swift` (alle Texte auf Deutsch und Englisch) |
-| KI | `AIEngine.swift` (Auswahl des Modells), `OllamaClient.swift`, `TodoRefiner.swift` (Anweisungen, Stichwort-Schätzung) |
+| KI | `AIEngine.swift` (Auswahl des Modells), `AIBatchQueue.swift` (wann das Modell läuft), `OllamaClient.swift`, `TodoRefiner.swift` (Anweisungen, Stichwort-Schätzung) |
 | Protokoll | `Analytics.swift` (Events, `AnalyticsSink`, lokale Datei) |
 | Zeiterfassung | `ActivityTracker.swift`, `Views/TrackingViews.swift` |
 | Claude (MCP) | `Sources/FocusFlowMCP/main.swift`, Links `focusflow://` in `AppState.open(_:)` |
@@ -66,8 +66,10 @@ ausführt. Ollama installierst du einmal mit:
 brew install ollama
 ```
 
-FocusFlow startet Ollama beim Öffnen und beendet es beim Schließen wieder, außer es lief schon vorher (abschaltbar
-unter Einstellungen → KI). Das Modell (Standard `gemma3:4b`, etwa 3 GB) lädst du danach in den Einstellungen per „Modell laden“. Läuft
+FocusFlow startet Ollama nur, wenn Notizen aufbereitet werden, und beendet es danach sofort wieder, außer es lief schon
+vorher (abschaltbar unter Einstellungen → KI). Notizen laufen gesammelt als Batch: In einer Fokus-Session warten sie bis
+kurz vor der Pause, außerhalb etwa eine Minute. Bis dahin steht eine grobe Schätzung am Todo. Das Modell wird direkt nach
+jedem Batch aus dem Speicher entfernt. Das Modell (Standard `gemma3:4b`, etwa 3 GB) lädst du danach in den Einstellungen per „Modell laden“. Läuft
 keins von beiden, übernimmt FocusFlow die Notiz direkt als Todo und schätzt die Dauer anhand von Stichworten.
 Eine Angabe wie „30 min“ oder „2h“ in der Notiz wird immer als Dauer übernommen. Die geschätzte Dauer lässt
 sich per Klick auf das Zeit-Badge ändern, entweder über eine Vorauswahl oder mit „Eigene Dauer eingeben…“
