@@ -33,6 +33,25 @@ open build/FocusFlow.app
 
 Für die Entwicklung reicht auch `swift build`. Das fertige `.app`-Bundle braucht es für Menüleiste und Tastenkürzel.
 
+## Tests
+
+```bash
+./scripts/test.sh
+```
+
+Die Tests (Swift Testing, in `Tests/FocusFlowTests`) prüfen die Logik, die beim Umbauen leicht verloren geht: Dauern
+parsen, Notizen schätzen, Übersetzungen (jeder Text auf Deutsch und Englisch mit denselben Platzhaltern), Regeln der
+Zeiterfassung, die KI-Warteschlange, Todos inklusive Bearbeiten während der Aufbereitung, das Laden alter Dateien und
+den MCP-Server, der dafür wie bei Claude als eigener Prozess läuft. Sie arbeiten in einem eigenen Ordner
+(`FOCUSFLOW_DATA_DIR`) und fassen deine echten Daten nicht an.
+
+Auf GitHub laufen sie bei jedem Push und Pull Request (`.github/workflows/tests.yml`). Lokal vor jedem Push, wenn du
+den Hook einmal einschaltest:
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ## Weitergeben
 
 Ohne Apples kostenpflichtiges Entwicklerprogramm lässt sich FocusFlow mit einem eigenen Zertifikat signieren. Weil die

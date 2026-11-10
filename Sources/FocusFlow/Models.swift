@@ -115,8 +115,10 @@ struct Todo: Codable, Identifiable, Equatable {
 
 enum Storage {
     static let directory: URL = {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = base.appendingPathComponent("FocusFlow", isDirectory: true)
+        // Tests point FocusFlow at a scratch folder, like the MCP server's FOCUSFLOW_DATA_DIR.
+        let dir = ProcessInfo.processInfo.environment["FOCUSFLOW_DATA_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("FocusFlow", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()

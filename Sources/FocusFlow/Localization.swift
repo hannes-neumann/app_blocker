@@ -22,7 +22,7 @@ enum L10n {
         String(format: text(key), arguments: values)
     }
 
-    private static let translations: [String: [AppLanguage: String]] = [
+    static let translations: [String: [AppLanguage: String]] = [
         "ready": [.german: "Bereit", .english: "Ready"],
         "focus": [.german: "Fokus", .english: "Focus"],
         "shortBreak": [.german: "Kurze Pause", .english: "Short break"],

@@ -16,6 +16,12 @@ let package = Package(
                 .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "FoundationModels"]),
             ]
         ),
+        .testTarget(
+            name: "FocusFlowTests",
+            dependencies: ["FocusFlow"],
+            path: "Tests/FocusFlowTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         // MCP server for Claude; build-app.sh puts it next to the app's binary.
         .executableTarget(
             name: "focusflow-mcp",
