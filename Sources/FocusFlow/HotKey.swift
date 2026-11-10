@@ -14,7 +14,12 @@ final class HotKey {
         Self.nextID += 1
         Self.actions[id] = action
         let hotKeyID = EventHotKeyID(signature: OSType(0x46_46_4C_57), id: id) // "FFLW"
-        RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotKeyID, GetApplicationEventTarget(), 0, &ref)
+        let status = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotKeyID,
+                                         GetApplicationEventTarget(), 0, &ref)
+        if status != noErr {
+            Self.actions.removeValue(forKey: id)
+            NSLog("Could not register global shortcut \(keyCode) (Carbon status \(status))")
+        }
     }
 
     deinit {
@@ -29,7 +34,9 @@ final class HotKey {
             var hotKeyID = EventHotKeyID()
             GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
                               nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID)
-            HotKey.actions[hotKeyID.id]?()
+            if let action = HotKey.actions[hotKeyID.id] {
+                DispatchQueue.main.async(execute: action)
+            }
             return noErr
         }, 1, &spec, nil, nil)
     }
