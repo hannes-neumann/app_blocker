@@ -1,0 +1,34 @@
+FocusFlow installieren
+======================
+
+1. Zieh FocusFlow.app in den Ordner „Programme“.
+2. Öffne FocusFlow. macOS meldet, dass die App nicht geprüft werden kann. Klick auf „Fertig“.
+3. Öffne Systemeinstellungen → Datenschutz & Sicherheit, scroll nach unten und klick bei FocusFlow
+   auf „Dennoch öffnen“. Bestätige mit deinem Passwort.
+
+Das ist nur beim ersten Start nötig. Die Meldung kommt, weil FocusFlow nicht über Apples
+kostenpflichtiges Entwicklerprogramm geprüft ist.
+
+Alternativ im Terminal:
+    xattr -dr com.apple.quarantine /Applications/FocusFlow.app
+
+FocusFlow erscheint danach oben in der Menüleiste. Läuft auf macOS 14 oder neuer.
+Alles bleibt auf deinem Mac: Notizen, Statistiken und Logs werden nur lokal gespeichert.
+
+
+Installing FocusFlow
+====================
+
+1. Drag FocusFlow.app into the Applications folder.
+2. Open FocusFlow. macOS says the app cannot be verified. Click “Done”.
+3. Open System Settings → Privacy & Security, scroll down and click “Open Anyway” next to FocusFlow.
+   Confirm with your password.
+
+You only need to do this the first time. The message appears because FocusFlow is not checked
+through Apple's paid developer program.
+
+Alternatively, in Terminal:
+    xattr -dr com.apple.quarantine /Applications/FocusFlow.app
+
+FocusFlow then shows up in the menu bar. Runs on macOS 14 or later.
+Everything stays on your Mac: notes, statistics and logs are only stored locally.

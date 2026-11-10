@@ -33,6 +33,29 @@ open build/FocusFlow.app
 
 Für die Entwicklung reicht auch `swift build`. Das fertige `.app`-Bundle braucht es für Menüleiste und Tastenkürzel.
 
+## Weitergeben
+
+Ohne Apples kostenpflichtiges Entwicklerprogramm lässt sich FocusFlow mit einem eigenen Zertifikat signieren. Weil die
+Signatur dann bei jedem Build gleich bleibt, behält macOS die erteilten Berechtigungen (Bedienungshilfen, Automation)
+auch nach Updates.
+
+Einmalig das Zertifikat anlegen: **Schlüsselbundverwaltung → Menü Schlüsselbundverwaltung → Zertifikatsassistent →
+Zertifikat erstellen…**, Name `FocusFlow Developer`, Identitätstyp „Selbstsigniertes Stammzertifikat“,
+Zertifikatstyp „Codesignatur“. Danach:
+
+```bash
+./scripts/release.sh
+```
+
+Das baut die App für Apple-Chips und Intel und legt `FocusFlow-<Version>.dmg` und `.zip` in `build/release`. Beim
+ersten Signieren fragt macOS, ob `codesign` den Schlüssel benutzen darf („Immer erlauben“). Die Version steht in
+`Resources/Info.plist` (`CFBundleShortVersionString`). Erhöhe sie vor jeder neuen Weitergabe. Ein anderes Zertifikat
+wählst du mit `FOCUSFLOW_SIGN_IDENTITY="Name" ./scripts/release.sh`.
+
+Die App ist nicht von Apple notarisiert. Beim ersten Start muss sie deshalb einmal unter Systemeinstellungen →
+Datenschutz & Sicherheit mit „Dennoch öffnen“ freigegeben werden. Die DMG enthält dazu eine kurze Anleitung
+(`Resources/INSTALL.txt`).
+
 ## Wie es funktioniert
 
 | Teil | Umsetzung |
