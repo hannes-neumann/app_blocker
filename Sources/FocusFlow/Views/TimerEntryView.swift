@@ -89,8 +89,9 @@ struct TimerEntryView: View {
                         ForEach(rows) { row in
                             rowView(row)
                                 .id(row.target)
-                                .onTapGesture(count: 2) { selection = row.target; start() }
+                                // A separate double tap would hold back the single tap until the double-click time is over.
                                 .onTapGesture { selection = row.target }
+                                .simultaneousGesture(TapGesture(count: 2).onEnded { selection = row.target; start() })
                         }
                         if rows.isEmpty {
                             Text(L10n.text("noTargetMatch"))
@@ -189,5 +190,69 @@ struct TimerEntryView: View {
         // A filter that matches nothing must not silently start without a project.
         guard rows.contains(where: { $0.target == selection }) else { return }
         onStart(minutes, selection)
+    }
+}
+
+/// The ⌃⌥T panel while a phase is running: the time left and the controls, all reachable from the keyboard.
+struct TimerSessionView: View {
+    @Environment(AppState.self) private var state
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(state.phase.title, systemImage: state.phase.symbol)
+                    .font(.headline)
+                Spacer()
+                Text(state.cycleText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if state.phase == .focus {
+                HStack(spacing: 6) {
+                    ProjectDot(colorIndex: state.selectedProject?.colorIndex, size: 8)
+                    Text(state.selectedTask?.title ?? state.selectedProject?.name ?? L10n.text("noProject"))
+                        .lineLimit(1)
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
+            Text(state.remainingText)
+                .font(.system(size: 44, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .frame(maxWidth: .infinity)
+            ProgressView(value: state.progress)
+                .tint(state.phase.isBreak ? .green : state.selectedProject?.color ?? .accentColor)
+            HStack(spacing: 8) {
+                Button { state.togglePause() } label: {
+                    Label(L10n.text(state.isPaused ? "resume" : "pause"), systemImage: state.isPaused ? "play.fill" : "pause.fill")
+                        .frame(minWidth: 90)
+                }
+                .keyboardShortcut(.defaultAction)
+                Button {
+                    state.skipPhase()
+                    onClose()
+                } label: {
+                    Label(L10n.text("skip"), systemImage: "forward.end.fill")
+                }
+                .keyboardShortcut("s", modifiers: [])
+                Spacer()
+                Button(role: .destructive) {
+                    state.stop()
+                    onClose()
+                } label: {
+                    Label(L10n.text("stop"), systemImage: "stop.fill")
+                }
+                .keyboardShortcut(.delete, modifiers: [.command])
+            }
+            .controlSize(.large)
+            Text(L10n.text("timerSessionFooter"))
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(18)
+        .frame(width: 420)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .onExitCommand(perform: onClose)
     }
 }

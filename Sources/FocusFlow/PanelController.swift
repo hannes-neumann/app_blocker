@@ -57,6 +57,7 @@ final class PanelController {
     private unowned let state: AppState
     private let capturePanel = FloatingPanel(closesOnResignKey: true, movable: true)
     private let timerPanel = FloatingPanel(closesOnResignKey: true)
+    private let projectPanel = FloatingPanel(closesOnResignKey: false, movable: true)
     private let breakPanel = FloatingPanel(closesOnResignKey: false)
     private let hudPanel = FloatingPanel(closesOnResignKey: false)
     private var dashboardWindow: NSWindow?
@@ -89,8 +90,14 @@ final class PanelController {
             Analytics.track(.timerEntryCancelled, ["via": "hotkey"])
             return
         }
-        Analytics.track(.timerEntryOpened)
+        Analytics.track(.timerEntryOpened, ["phase": .string(state.phase.rawValue)])
         let close = { [timerPanel] in timerPanel.orderOut(nil) }
+        guard state.phase == .idle else {
+            timerPanel.setContent(TimerSessionView(onClose: close).environment(state))
+            timerPanel.position(verticalFraction: 0.3)
+            timerPanel.makeKeyAndOrderFront(nil)
+            return
+        }
         let initial: FocusTarget = state.selectedTaskID.map { .task($0) } ?? state.selectedProjectID.map { .project($0) } ?? .none
         timerPanel.setContent(TimerEntryView(
             defaultMinutes: state.settings.focusMinutes,
@@ -103,6 +110,17 @@ final class PanelController {
         ).environment(state))
         timerPanel.position(verticalFraction: 0.3)
         timerPanel.makeKeyAndOrderFront(nil)
+    }
+
+    /// A new project from the menu bar. A sheet there would close together with the menu bar window
+    /// as soon as it takes a click, so the editor gets its own panel.
+    func showProjectEditor(onCreate: @escaping (Project) -> Void) {
+        let close = { [projectPanel] in projectPanel.orderOut(nil) }
+        projectPanel.setContent(ProjectEditorSheet(project: nil, onCreate: onCreate, onClose: close)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .environment(state))
+        projectPanel.position(verticalFraction: 0.3)
+        projectPanel.makeKeyAndOrderFront(nil)
     }
 
     func showBreak() {

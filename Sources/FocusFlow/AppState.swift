@@ -460,7 +460,6 @@ final class AppState {
     }
 
     func showTimerEntry() {
-        guard phase == .idle else { return }
         panels.showTimerEntry()
     }
 

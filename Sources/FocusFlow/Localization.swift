@@ -275,6 +275,7 @@ enum L10n {
         , "streakOneDay": [.german: "Serie: %d Tag", .english: "Streak: %d day"]
         , "task": [.german: "Aufgabe", .english: "Task"]
         , "thisWeek": [.german: "Diese Woche", .english: "This week"]
+        , "timerSessionFooter": [.german: "↩ Pause oder weiter · S überspringen · ⌘⌫ stoppen · esc schließen", .english: "↩ pause or resume · S skip · ⌘⌫ stop · esc close"]
         , "timerEntryFooter": [.german: "↩ starten · ↑↓ Projekt oder Aufgabe wählen · ⇥ suchen · esc schließen · Dauer wie 25 min, 1h oder 1:30", .english: "↩ start · ↑↓ pick project or task · ⇥ search · esc close · duration like 25 min, 1h or 1:30"]
         , "timerShortcut": [.german: "Timer mit eigener Dauer", .english: "Timer with custom duration"]
         , "title": [.german: "Titel", .english: "Title"]

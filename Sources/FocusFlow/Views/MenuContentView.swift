@@ -20,6 +20,8 @@ struct MenuContentView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var newNote = ""
     @State private var showDone = false
+    @State private var window: NSWindow?
+    @State private var escapeMonitor: Any?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -34,9 +36,25 @@ struct MenuContentView: View {
         }
         .padding(16)
         .frame(width: 340)
+        .background(WindowReader { window = $0 })
         .onAppear {
             state.refreshSuggestion()
             Analytics.track(.menuOpened, ["phase": .string(state.phase.rawValue)])
+            installEscape()
+        }
+        .onDisappear {
+            if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) }
+            escapeMonitor = nil
+        }
+    }
+
+    /// The menu bar window does not close on esc by itself, and `onExitCommand` only fires while a control has focus.
+    private func installEscape() {
+        guard escapeMonitor == nil else { return }
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.keyCode == 53, let window, event.window === window else { return event }
+            dismiss()
+            return nil
         }
     }
 
@@ -264,5 +282,27 @@ struct TodoRow: View {
         .padding(.horizontal, 6)
         .background(hovering ? Color.primary.opacity(0.06) : .clear, in: RoundedRectangle(cornerRadius: 6))
         .onHover { hovering = $0 }
+    }
+}
+
+/// Hands over the window a view ends up in.
+struct WindowReader: NSViewRepresentable {
+    let onWindow: (NSWindow?) -> Void
+
+    func makeNSView(context: Context) -> NSView { Reader(onWindow: onWindow) }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class Reader: NSView {
+        let onWindow: (NSWindow?) -> Void
+        init(onWindow: @escaping (NSWindow?) -> Void) {
+            self.onWindow = onWindow
+            super.init(frame: .zero)
+        }
+        required init?(coder: NSCoder) { nil }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            let window = window
+            DispatchQueue.main.async { self.onWindow(window) }
+        }
     }
 }

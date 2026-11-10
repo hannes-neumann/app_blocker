@@ -170,6 +170,14 @@ struct FocusTargetPicker: View {
         }
     }
 
+    private func createProject() {
+        if compact {
+            state.panels.showProjectEditor { project in state.selectedProjectID = project.id }
+        } else {
+            creating = true
+        }
+    }
+
     private func chip(_ project: Project?) -> some View {
         let selected = state.selectedProject?.id == project?.id
         return Button { state.selectedProjectID = project?.id } label: {
@@ -193,7 +201,7 @@ struct FocusTargetPicker: View {
                 Button { state.selectedProjectID = project.id } label: { Text(project.name) }
             }
             Divider()
-            Button(L10n.text("newProject") + "…") { creating = true }
+            Button(L10n.text("newProject") + "…") { createProject() }
         } label: {
             HStack(spacing: 6) {
                 ProjectDot(colorIndex: state.selectedProject?.colorIndex, size: 8)
@@ -299,6 +307,8 @@ struct ProjectEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     let project: Project?
     var onCreate: (Project) -> Void = { _ in }
+    /// Set when the editor runs in its own panel instead of a sheet.
+    var onClose: (() -> Void)?
     @State private var name = ""
     @State private var colorIndex = 0
     @State private var symbol = "folder.fill"
@@ -355,7 +365,7 @@ struct ProjectEditorSheet: View {
             }
             HStack {
                 Spacer()
-                Button(L10n.text("cancel"), role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(L10n.text("cancel"), role: .cancel) { close() }.keyboardShortcut(.cancelAction)
                 Button(L10n.text(project == nil ? "create" : "save"), action: save)
                     .keyboardShortcut(.defaultAction)
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -390,7 +400,11 @@ struct ProjectEditorSheet: View {
         } else {
             return
         }
-        dismiss()
+        close()
+    }
+
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
     }
 }
 
