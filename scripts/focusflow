@@ -1,0 +1,91 @@
+#!/bin/bash
+# focusflow: build, restart and test FocusFlow from any directory.
+#
+# Make it available everywhere (once):
+#   ln -s "$PWD/scripts/focusflow" ~/.local/bin/focusflow
+set -euo pipefail
+
+SCRIPT="$(readlink -f "$0")"
+REPO="${FOCUSFLOW_REPO:-$(cd "$(dirname "$SCRIPT")/.." && pwd)}"
+APP="$REPO/build/FocusFlow.app"
+TOKEN_FILE="$HOME/Library/Application Support/FocusFlow/mcp-token"
+
+usage() {
+    cat <<USAGE
+focusflow – FocusFlow bauen und starten ($REPO)
+
+  focusflow              bauen und neu starten (wie "restart")
+  focusflow restart      bauen, laufende App beenden, neue starten
+  focusflow build        nur bauen
+  focusflow start        starten (baut vorher, falls nötig)
+  focusflow stop         beenden
+  focusflow test [...]   Tests, Argumente gehen an swift test
+  focusflow release      DMG und ZIP zum Weitergeben bauen
+  focusflow where        zeigt den Projektordner
+
+  --force                beendet auch eine laufende Fokus-Session (bei restart und stop)
+USAGE
+}
+
+running() { pgrep -f "FocusFlow.app/Contents/MacOS/FocusFlow$" >/dev/null; }
+
+wait_until_stopped() {
+    for _ in $(seq 1 "$1"); do
+        running || return 0
+        sleep 0.5
+    done
+    ! running
+}
+
+stop() {
+    local force="$1"
+    running || return 0
+    # The app's own quit link: it cleans up blocking and logs like a normal quit, and needs no permission.
+    if [ -r "$TOKEN_FILE" ]; then
+        local query="token=$(tr -d '[:space:]' <"$TOKEN_FILE")"
+        [ "$force" = 1 ] && query="$query&force=1"
+        open -g "focusflow://quit?$query"
+        wait_until_stopped 10 && return 0
+    fi
+    if [ "$force" = 1 ]; then
+        # Older builds don't know the quit link; macOS may ask once whether the terminal may control FocusFlow.
+        osascript -e 'tell application id "com.hannesneumann.FocusFlow" to quit' >/dev/null 2>&1 || true
+        wait_until_stopped 20 && return 0
+        echo "FocusFlow lässt sich nicht beenden." >&2
+    else
+        echo "FocusFlow läuft weiter: Vermutlich läuft gerade eine Fokus-Session (oder eine ältere Version)." >&2
+        echo "Trotzdem beenden mit: focusflow ${COMMAND} --force" >&2
+    fi
+    return 1
+}
+
+start() {
+    [ -d "$APP" ] || "$REPO/scripts/build-app.sh"
+    open "$APP"
+    echo "FocusFlow gestartet: $APP"
+}
+
+COMMAND="${1:-restart}"
+[ $# -gt 0 ] && shift
+FORCE=0
+ARGS=()
+for arg in "$@"; do
+    if [ "$arg" = --force ]; then FORCE=1; else ARGS+=("$arg"); fi
+done
+
+case "$COMMAND" in
+    restart)
+        # Build first, so the app keeps running while the compiler works.
+        "$REPO/scripts/build-app.sh"
+        stop "$FORCE"
+        start
+        ;;
+    build) "$REPO/scripts/build-app.sh" ;;
+    start) running && echo "FocusFlow läuft schon." || start ;;
+    stop) stop "$FORCE" && echo "FocusFlow beendet." ;;
+    test) "$REPO/scripts/test.sh" ${ARGS[@]+"${ARGS[@]}"} ;;
+    release) "$REPO/scripts/release.sh" ;;
+    where) echo "$REPO" ;;
+    help | -h | --help) usage ;;
+    *) usage >&2; exit 1 ;;
+esac

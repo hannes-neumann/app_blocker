@@ -33,6 +33,15 @@ open build/FocusFlow.app
 
 Für die Entwicklung reicht auch `swift build`. Das fertige `.app`-Bundle braucht es für Menüleiste und Tastenkürzel.
 
+Schneller geht es mit dem Befehl `focusflow`, der von jedem Ordner aus baut und neu startet. Einmal einrichten:
+
+```bash
+ln -s "$PWD/scripts/focusflow" ~/.local/bin/focusflow
+```
+
+Danach baut `focusflow` die App und startet sie neu. Weitere Befehle: `focusflow build`, `start`, `stop`, `test` und
+`release`. Eine laufende Fokus-Session wird nur mit `--force` beendet. `focusflow help` zeigt alles.
+
 ## Tests
 
 ```bash

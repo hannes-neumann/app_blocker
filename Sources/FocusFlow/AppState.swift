@@ -227,10 +227,15 @@ final class AppState {
             guard let id = value("task").flatMap(UUID.init), let todo = todos.todos.first(where: { $0.id == id }), !todo.isDone else { break }
             todos.toggleDone(id, source: "link")
             handled = true
+        case "quit" where trusted:
+            // From `focusflow restart`. A running session only ends when asked for explicitly.
+            guard phase == .idle || value("force") == "1" else { break }
+            handled = true
         default:
             break
         }
         Analytics.track(.appLinkOpened, ["command": .string(command), "trusted": .bool(trusted), "handled": .bool(handled)])
+        if command == "quit" && handled { NSApp.terminate(nil) }
     }
 
     func shutdown() {
