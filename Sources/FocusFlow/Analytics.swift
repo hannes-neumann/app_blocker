@@ -92,6 +92,8 @@ enum AnalyticsEventName: String, Codable {
     case projectRenamed = "project_renamed"
     case projectBlockedAppsChanged = "project_blocked_apps_changed"
     case projectDeleted = "project_deleted"
+    case projectFinished = "project_finished"
+    case projectReopened = "project_reopened"
     case projectStyleChanged = "project_style_changed"
     case projectGoalChanged = "project_goal_changed"
     case focusProjectSelected = "focus_project_selected"

@@ -51,6 +51,16 @@ final class ProjectStore {
                                                "symbol": .string(projects[index].symbol)])
     }
 
+    /// Projects that are not finished, for everywhere a project is chosen.
+    var active: [Project] { projects.filter { !$0.isFinished } }
+
+    func setFinished(_ id: UUID, _ finished: Bool) {
+        guard let index = projects.firstIndex(where: { $0.id == id }), projects[index].isFinished != finished else { return }
+        projects[index].finishedAt = finished ? Date() : nil
+        save()
+        Analytics.track(finished ? .projectFinished : .projectReopened, ["project_id": .string(id.uuidString)])
+    }
+
     func setWeeklyGoal(_ id: UUID, minutes: Int?) {
         guard let index = projects.firstIndex(where: { $0.id == id }) else { return }
         projects[index].weeklyGoalMinutes = minutes
@@ -75,6 +85,32 @@ final class ProjectStore {
                                              "count": .int(projects[index].trackingRules.count)],
                         content: ["value": rule.value])
     }
+
+    /// Keeps the words the model learned for a project as rules. A word already learned for another project
+    /// is skipped, so one word never points at two projects. At most `maxLearnedRules` are kept per project.
+    func learnKeywords(_ words: [String], for id: UUID) {
+        guard let index = projects.firstIndex(where: { $0.id == id }) else { return }
+        var added = 0
+        for word in words {
+            let taken = projects.contains { project in
+                project.trackingRules.contains { $0.kind == .learned && $0.value == word }
+            }
+            guard !taken else { continue }
+            projects[index].trackingRules.append(TrackingRule(kind: .learned, value: word))
+            added += 1
+        }
+        guard added > 0 else { return }
+        let learned = projects[index].trackingRules.filter { $0.kind == .learned }
+        if learned.count > Self.maxLearnedRules {
+            let dropped = Set(learned.prefix(learned.count - Self.maxLearnedRules).map(\.id))
+            projects[index].trackingRules.removeAll { dropped.contains($0.id) }
+        }
+        save()
+        Analytics.track(.trackingRuleAdded, ["project_id": .string(id.uuidString), "kind": .string("learned"),
+                                             "count": .int(projects[index].trackingRules.count)])
+    }
+
+    static let maxLearnedRules = 30
 
     func removeRule(_ ruleID: UUID, from id: UUID) {
         guard let index = projects.firstIndex(where: { $0.id == id }),

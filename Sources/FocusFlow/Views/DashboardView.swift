@@ -46,7 +46,7 @@ struct DashboardView: View {
                 Section {
                     Label(L10n.text("allProjects"), systemImage: DashboardSection.projects.symbol)
                         .tag(SidebarItem.section(.projects))
-                    ForEach(state.projects.projects) { project in
+                    ForEach(state.projects.active) { project in
                         HStack(spacing: 8) {
                             ProjectDot(colorIndex: project.colorIndex, size: 9)
                             Text(project.name).lineLimit(1)
@@ -579,7 +579,7 @@ struct DashboardTodoRow: View {
         return Menu {
             Button(L10n.text("noProject")) { state.todos.setProject(todo.id, projectID: nil) }
             Divider()
-            ForEach(state.projects.projects) { item in
+            ForEach(state.projects.active) { item in
                 Button(item.name) { state.todos.setProject(todo.id, projectID: item.id) }
             }
         } label: {

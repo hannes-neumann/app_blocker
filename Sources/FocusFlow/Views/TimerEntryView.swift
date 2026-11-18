@@ -158,7 +158,7 @@ struct TimerEntryView: View {
     /// "No project", the projects, then open tasks; filtered by every typed word.
     private var rows: [Row] {
         var rows = [Row(target: .none, title: L10n.text("noProject"), detail: nil, colorIndex: nil)]
-        rows += state.projects.projects.map { project in
+        rows += state.projects.active.map { project in
             Row(target: .project(project.id), title: project.name, detail: L10n.text("project"), colorIndex: project.colorIndex)
         }
         rows += state.todos.open.map { todo in

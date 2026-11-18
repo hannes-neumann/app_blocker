@@ -75,6 +75,12 @@ final class AppState {
         startFocus(source: source)
     }
 
+    /// Marks a project as finished or opens it again. A finished project is no longer selected for focus.
+    func setProjectFinished(_ id: UUID, _ finished: Bool) {
+        if finished, selectedProjectID == id { selectedProjectID = nil }
+        projects.setFinished(id, finished)
+    }
+
     func deleteProject(_ id: UUID) {
         if selectedProjectID == id { selectedProjectID = nil }
         if openProjectID == id { openProjectID = nil }
@@ -162,8 +168,10 @@ final class AppState {
         todos.resumePendingRefinements()
         activity.context = { [weak self] in
             guard let self else { return (nil, []) }
-            return (phase == .focus ? selectedProject?.id : nil, projects.projects)
+            return (phase == .focus ? selectedProject?.id : nil, projects.active)
         }
+        activity.classify = { [ai] text, projects in await ai.classifyProject(in: text, projects: projects) }
+        activity.learn = { [weak self] id, words in self?.projects.learnKeywords(words, for: id) }
         activity.start()
         ensureLinkToken()
         isSetUp = true
