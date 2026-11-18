@@ -1,46 +1,55 @@
 # FocusFlow
 
-Eine macOS-Menüleisten-App, die einen Pomodoro-Fokustimer mit App- und Webseiten-Blocker kombiniert
-und spontane Gedanken während der Fokuszeit in konkrete Todos verwandelt, die dir in der nächsten
-passenden Pause vorgeschlagen werden.
+**A macOS menu bar app for deep work:** a Pomodoro timer that blocks distracting apps and websites, turns quick
+notes into estimated todos with a local language model, tracks time per project automatically, and lets Claude
+plan your todos into your calendar.
+
+Everything runs on your Mac. No account, no cloud, no screen recording.
+
+> Deutsche Dokumentation mit allen Details: [docs/README.de.md](docs/README.de.md)
 
 ## Features
 
-- **Pomodoro-Timer** in der Menüleiste: Fokus, kurze und lange Pausen, Runden, Pause/Überspringen/Stopp.
-- **App-Blocker**: Ausgewählte Apps werden während der Fokuszeit beendet und beim erneuten Öffnen sofort wieder geschlossen.
-- **Webseiten-Blocker**: Domains werden systemweit über `/etc/hosts` gesperrt (gilt für alle Browser).
-- **Schnellnotiz** mit `⌃⌥N`: ein schwebendes Textfeld, egal in welcher App du gerade bist. Mit Enter speichern, mit Esc schließen.
-- **Timer-Shortcut** mit `⌃⌥T`: öffnet ein Eingabefenster für eine eigene Fokusdauer. Mit ↑↓ wählst du Projekt oder Aufgabe, mit ⇥ suchst du danach, mit Enter startet der Timer.
-- **KI-Aufbereitung**: Ein Sprachmodell auf deinem Mac (Apple Foundation Model oder ein Ollama-Modell) macht aus der Notiz ein oder mehrere konkrete Todos mit geschätzter Dauer.
-- **Pausenvorschlag**: Zu Beginn jeder Pause schlägt FocusFlow das längste offene Todo vor, das noch in die Pause passt.
-- **Dashboard**: ein eigenes Fenster mit Übersicht (Timer mit Projektwahl, Tagesziel, Wochenzahlen, Wochendiagramm nach Projekt, Insights, heutige Sessions, nächste Todos), Projekten, Todos, Insights und Einstellungen. Öffnest du es über „Dashboard“ im Menü.
-- **Projekte**: Projekte mit Farbe, Symbol und optionalem Wochenziel anlegen (Seitenleiste, Übersicht oder Menü). Vor dem Start wählst du ein Projekt und optional eine Aufgabe, die Session zählt dann für dieses Projekt. Sessions lassen sich nachträglich umhängen, z. B. in der Pause oder in der Session-Liste. Jede Projektseite zeigt Fokuszeit, Verlauf, Tageszeiten, Aufgaben mit Fokuszeit gegen Schätzung und eigene App-Sperrlisten. Regeln der Aufgabe überschreiben Projektregeln, ansonsten gilt die globale Regel.
-- **Automatische Zeiterfassung** (optional): erfasst die vordere App, das daneben sichtbare Fenster, Fenstertitel und Browser-Adressen und ordnet die Zeit über Regeln pro Projekt zu. Keine Bildschirmaufnahme, alles bleibt lokal.
-- **Claude-Anbindung (MCP)**: Claude kann deine Todos und Projekte lesen, sie mit deinem Kalender zu Fokus-Blöcken einplanen und Todos anlegen, abhaken oder starten. Siehe unten.
-- **Insights**: Fokuszeit pro Tag nach Projekt mit Tagesziel, Trend zum Zeitraum davor, Zeit nach Projekt, Tageszeiten, Wochentage, Schätzgenauigkeit, Fokuszeit pro Aufgabe und alle Sessions, für 7, 30 oder 90 Tage, dazu automatisch formulierte Auffälligkeiten. Im Menü steht eine Kurzübersicht für heute.
+- **Focus timer in the menu bar**: focus sessions, short and long breaks, rounds; pause, skip or stop.
+- **Blocking**: chosen apps are closed during focus; websites are blocked system-wide via `/etc/hosts` through a
+  small helper that only blocks while FocusFlow is running.
+- **Keyboard first**: `⌃⌥N` opens a floating quick note anywhere; `⌃⌥T` starts a focus with your own duration and
+  lets you pick a project or task with ↑↓ (or controls a running session).
+- **Local AI for todos**: a note like "prepare slides for monday" becomes one or more concrete todos with a time
+  estimate, using Apple Intelligence (macOS 26) or any [Ollama](https://ollama.com) model. Requests are batched
+  shortly before your next break, and the model is unloaded right after, so it costs little power and memory.
+- **Break suggestions**: each break suggests the longest open todo that still fits.
+- **Projects and insights**: colors, icons, weekly goals, focus time per project, estimate accuracy, best hours of
+  the day, and automatically worded observations.
+- **Automatic time tracking** (opt-in): rules by app, domain or window title assign your time to projects. It also
+  considers the window visible *next to* the front app, so a PDF beside a chat counts for the right project. It
+  only reads window metadata, never the screen.
+- **Claude integration (MCP)**: a bundled MCP server lets Claude read your todos and focus history, plan them as
+  focus blocks into free calendar slots, and add, complete or start todos.
+- **German and English** throughout.
 
-## Bauen und starten
+## Requirements
 
-Es reichen die Xcode Command Line Tools (Swift 6 und das macOS 26 SDK), Xcode selbst wird nicht gebraucht.
+- macOS 14 or later (Apple silicon or Intel)
+- To build: Swift 6 via the Xcode Command Line Tools; full Xcode is not needed
+- Optional: Ollama (`brew install ollama`) for the AI features on macOS before 26
+
+## Build and run
 
 ```bash
 ./scripts/build-app.sh
-```
-
-```bash
 open build/FocusFlow.app
 ```
 
-Für die Entwicklung reicht auch `swift build`. Das fertige `.app`-Bundle braucht es für Menüleiste und Tastenkürzel.
-
-Schneller geht es mit dem Befehl `focusflow`, der von jedem Ordner aus baut und neu startet. Einmal einrichten:
+For day-to-day work there is a small command that builds and restarts the app from any directory:
 
 ```bash
 ln -s "$PWD/scripts/focusflow" ~/.local/bin/focusflow
+focusflow            # build and restart
+focusflow help       # build, start, stop, test, release
 ```
 
-Danach baut `focusflow` die App und startet sie neu. Weitere Befehle: `focusflow build`, `start`, `stop`, `test` und
-`release`. Eine laufende Fokus-Session wird nur mit `--force` beendet. `focusflow help` zeigt alles.
+A running focus session is only ended with `--force`.
 
 ## Tests
 
@@ -48,122 +57,52 @@ Danach baut `focusflow` die App und startet sie neu. Weitere Befehle: `focusflow
 ./scripts/test.sh
 ```
 
-Die Tests (Swift Testing, in `Tests/FocusFlowTests`) prüfen die Logik, die beim Umbauen leicht verloren geht: Dauern
-parsen, Notizen schätzen, Übersetzungen (jeder Text auf Deutsch und Englisch mit denselben Platzhaltern), Regeln der
-Zeiterfassung, die KI-Warteschlange, Todos inklusive Bearbeiten während der Aufbereitung, das Laden alter Dateien und
-den MCP-Server, der dafür wie bei Claude als eigener Prozess läuft. Sie arbeiten in einem eigenen Ordner
-(`FOCUSFLOW_DATA_DIR`) und fassen deine echten Daten nicht an.
+Swift Testing covers duration parsing, note estimates, translations (every text in both languages with matching
+placeholders), tracking rules, the AI batch queue, todo handling, loading older data files, and the MCP server run
+as a separate process. Tests use a scratch data folder and never touch your real data. GitHub Actions runs them on
+every push; `git config core.hooksPath .githooks` also runs them before each push locally.
 
-Auf GitHub laufen sie bei jedem Push und Pull Request (`.github/workflows/tests.yml`). Lokal vor jedem Push, wenn du
-den Hook einmal einschaltest:
+## Sharing builds
 
-```bash
-git config core.hooksPath .githooks
-```
+`./scripts/release.sh` builds a universal app and packs a DMG and a ZIP in `build/release`, signed with a
+self-signed certificate named `FocusFlow Developer` (see [docs/README.de.md](docs/README.de.md#weitergeben) for how
+to create it). The app is not notarized, so on first launch it has to be allowed once under
+System Settings → Privacy & Security → "Open Anyway"; the DMG includes short instructions.
 
-## Weitergeben
+## Claude (MCP)
 
-Ohne Apples kostenpflichtiges Entwicklerprogramm lässt sich FocusFlow mit einem eigenen Zertifikat signieren. Weil die
-Signatur dann bei jedem Build gleich bleibt, behält macOS die erteilten Berechtigungen (Bedienungshilfen, Automation)
-auch nach Updates.
+The build places `focusflow-mcp` inside the app bundle. Settings → General → Claude copies a ready-made
+configuration for Claude Desktop or Claude Code. Tools:
 
-Einmalig das Zertifikat anlegen: **Schlüsselbundverwaltung → Menü Schlüsselbundverwaltung → Zertifikatsassistent →
-Zertifikat erstellen…**, Name `FocusFlow Developer`, Identitätstyp „Selbstsigniertes Stammzertifikat“,
-Zertifikatstyp „Codesignatur“. Danach:
-
-```bash
-./scripts/release.sh
-```
-
-Das baut die App für Apple-Chips und Intel und legt `FocusFlow-<Version>.dmg` und `.zip` in `build/release`. Beim
-ersten Signieren fragt macOS, ob `codesign` den Schlüssel benutzen darf („Immer erlauben“). Die Version steht in
-`Resources/Info.plist` (`CFBundleShortVersionString`). Erhöhe sie vor jeder neuen Weitergabe. Ein anderes Zertifikat
-wählst du mit `FOCUSFLOW_SIGN_IDENTITY="Name" ./scripts/release.sh`.
-
-Die App ist nicht von Apple notarisiert. Beim ersten Start muss sie deshalb einmal unter Systemeinstellungen →
-Datenschutz & Sicherheit mit „Dennoch öffnen“ freigegeben werden. Die DMG enthält dazu eine kurze Anleitung
-(`Resources/INSTALL.txt`).
-
-## Wie es funktioniert
-
-| Teil | Umsetzung |
+| Tool | What it does |
 | --- | --- |
-| Timer & Zustand | `AppState.swift` |
-| App-Blocker | `AppBlocker.swift` beobachtet über `NSWorkspace` App-Starts und -Aktivierungen |
-| Webseiten-Blocker | `DomainBlocker.swift` (siehe unten) |
-| Tastenkürzel | `HotKey.swift` über die Carbon Hot-Key-API (braucht keine Bedienungshilfen-Freigabe) |
-| Todos & Vorschlag | `TodoStore.swift` |
-| Insights | `StatsStore.swift`, `Insights.swift` (Auswertungen), `Views/StatsView.swift` (Swift Charts) |
-| Dashboard | `Views/DashboardView.swift`, `Views/ProjectsView.swift`, `Views/DashboardComponents.swift`, `ProjectStyle.swift` (Projektfarben) |
-| Sprachen | `Localization.swift` (alle Texte auf Deutsch und Englisch) |
-| KI | `AIEngine.swift` (Auswahl des Modells), `AIBatchQueue.swift` (wann das Modell läuft), `OllamaClient.swift`, `TodoRefiner.swift` (Anweisungen, Stichwort-Schätzung) |
-| Protokoll | `Analytics.swift` (Events, `AnalyticsSink`, lokale Datei) |
-| Zeiterfassung | `ActivityTracker.swift`, `Views/TrackingViews.swift` |
-| Claude (MCP) | `Sources/FocusFlowMCP/main.swift`, Links `focusflow://` in `AppState.open(_:)` |
+| `get_planning_context` | open todos with time to plan, projects and weekly goals, pomodoro settings, estimate factor, best focus hours |
+| `list_todos` | todos, optionally by project or including finished ones |
+| `plan_focus_blocks` | packs todos into free slots as pomodoro blocks with breaks; returns calendar titles, descriptions and a start link; creates nothing itself |
+| `add_todo`, `complete_todo`, `start_focus` | change todos or start a session through the running app |
 
-**Webseiten-Sperre:** Beim ersten Fokus installiert FocusFlow einmalig einen kleinen Systemdienst
-(`/Library/LaunchDaemons/com.hannesneumann.FocusFlow.blocker.plist`). Dafür fragt macOS ein einziges Mal
-nach dem Admin-Passwort, danach nie wieder. Der Dienst liest zwei Dateien der App (`block-state` und
-`blocked-domains`) und schreibt nur, solange der Status „on“ ist *und* FocusFlow läuft, einen markierten
-Block in `/etc/hosts`. Beendest du die App oder stürzt sie ab, verschwindet die Sperre innerhalb von
-Sekunden, und beim Systemstart räumt der Dienst Reste auf. Er akzeptiert nur reguläre Dateien deines
-Benutzers und nur gültige Domainnamen. Entfernen kannst du ihn unter Einstellungen → Blockieren.
+The server only reads the app's files. Changes go through `focusflow://` links to the running app and need a
+token that only your user can read.
 
-**KI:** Unter Einstellungen → KI wählst du das Modell. „Automatisch“ nimmt Apple Intelligence
-(erst ab **macOS 26** mit aktivierter Apple Intelligence) und sonst **Ollama**, das offene Modelle lokal
-ausführt. Ollama installierst du einmal mit:
+## How it is built
 
-```bash
-brew install ollama
-```
-
-FocusFlow startet Ollama nur, wenn Notizen aufbereitet werden, und beendet es danach sofort wieder, außer es lief schon
-vorher (abschaltbar unter Einstellungen → KI). Notizen laufen gesammelt als Batch: In einer Fokus-Session warten sie bis
-kurz vor der Pause, außerhalb etwa eine Minute. Bis dahin steht eine grobe Schätzung am Todo. Das Modell wird direkt nach
-jedem Batch aus dem Speicher entfernt. Das Modell (Standard `gemma3:4b`, etwa 3 GB) lädst du danach in den Einstellungen per „Modell laden“. Läuft
-keins von beiden, übernimmt FocusFlow die Notiz direkt als Todo und schätzt die Dauer anhand von Stichworten.
-Eine Angabe wie „30 min“ oder „2h“ in der Notiz wird immer als Dauer übernommen. Die geschätzte Dauer lässt
-sich per Klick auf das Zeit-Badge ändern, entweder über eine Vorauswahl oder mit „Eigene Dauer eingeben…“
-als Text („25“, „45 min“, „1h“, „1,5h“, „1:30“).
-
-Daten (Einstellungen, Projekte, Todos und Fokus-Sessions) liegen in `~/Library/Application Support/FocusFlow/`.
-
-**Protokoll:** Jede Bedienung wird als eine JSON-Zeile in `Logs/events-JJJJ-MM-TT.jsonl` im selben Ordner
-gespeichert (abschaltbar und löschbar unter Einstellungen → Allgemein, Dateien älter als 180 Tage werden
-gelöscht). Jedes Event hat `name`, `timestamp`, `sessionID` (ein App-Start), `installID`, `appVersion`,
-`properties` und optional `content`. In `content` stehen persönliche Texte wie Notizen, Todo-Titel und Domains;
-alles andere ist frei von Inhalten. Auswerten lässt es sich z. B. so:
-
-```bash
-cat ~/Library/Application\ Support/FocusFlow/Logs/*.jsonl | jq -s 'group_by(.name) | map({name: .[0].name, count: length})'
-```
-
-Event-Namen und Schlüssel folgen den Regeln von Firebase Analytics (snake_case, höchstens 40 Zeichen). Für ein
-späteres Backend implementiert man `AnalyticsSink`, lässt dabei `content` weg, fragt die Nutzer vorher um
-Erlaubnis und hängt den Sink an `Analytics.sinks` an.
-
-## Claude-Anbindung (MCP)
-
-`scripts/build-app.sh` legt den MCP-Server `focusflow-mcp` in die App (`FocusFlow.app/Contents/MacOS/focusflow-mcp`). Unter Einstellungen → Allgemein → Claude kopierst du die passende Konfiguration:
-
-- **Claude Desktop**: den Eintrag unter `mcpServers` in `~/Library/Application Support/Claude/claude_desktop_config.json` einfügen und Claude neu starten.
-- **Claude Code**: den kopierten Befehl `claude mcp add --scope user focusflow -- …` im Terminal ausführen.
-
-Werkzeuge:
-
-| Werkzeug | Was es tut |
+| Part | Where |
 | --- | --- |
-| `get_planning_context` | offene Todos mit einzuplanender Zeit, Projekte mit Wochenziel, Pomodoro-Einstellungen, Schätzfaktor, beste Fokuszeiten |
-| `list_todos` | Todos, optional nach Projekt oder mit erledigten |
-| `plan_focus_blocks` | verteilt Todos auf freie Zeitfenster: nach Projekt gebündelt, in Pomodoros mit Pausen, lange Todos aufgeteilt. Liefert Titel, Beschreibung und einen Start-Link für jeden Kalendertermin. Legt selbst nichts an. |
-| `add_todo`, `complete_todo`, `start_focus` | ändern Todos oder starten eine Session über die laufende App |
+| Timer and state | `AppState.swift` |
+| App and website blocking | `AppBlocker.swift`, `DomainBlocker.swift` |
+| Global shortcuts | `HotKey.swift` (Carbon hot keys, no Accessibility permission needed) |
+| Todos and suggestions | `TodoStore.swift` |
+| AI | `AIEngine.swift`, `AIBatchQueue.swift`, `OllamaClient.swift`, `TodoRefiner.swift` |
+| Time tracking | `ActivityTracker.swift`, `Views/TrackingViews.swift` |
+| Insights and dashboard | `StatsStore.swift`, `Insights.swift`, `Views/` |
+| Local event log | `Analytics.swift` (JSON lines, size-capped, never leaves the Mac) |
+| Translations | `Localization.swift` |
+| MCP server | `Sources/FocusFlowMCP/main.swift` |
 
-So planst du mit Claude: „Plan mir meine FocusFlow-Todos morgen in den Kalender.“ Claude liest den Kontext, holt die Termine aus dem Google-Kalender, rechnet die freien Zeiten aus, lässt `plan_focus_blocks` verteilen, zeigt dir den Plan und legt die Termine erst nach deinem OK an. Der Link im Termin (`focusflow://focus?task=…`) startet den Fokus direkt in FocusFlow.
+Data lives in `~/Library/Application Support/FocusFlow/`.
 
-Der Server liest die Dateien der App nur. Änderungen schickt er über `focusflow://`-Links an die laufende App, damit sie die einzige Stelle bleibt, die schreibt. Links, die Daten ändern, brauchen das Token aus `mcp-token` im Datenordner, das nur dein Benutzer lesen kann. Ein Fokus-Link geht ohne Token.
+## Known limitations
 
-## Bekannte Grenzen
-
-- Bereits geöffnete Tabs gesperrter Seiten können bis zum Neuladen weiterlaufen, weil Browser bestehende Verbindungen und DNS-Antworten kurz zwischenspeichern.
-- Die Tastenkürzel sind im Moment fest auf `⌃⌥N` (Schnellnotiz) und `⌃⌥T` (Timer) eingestellt.
-- Apps mit ungesicherten Dokumenten fragen beim Beenden nach. Lehnst du ab, wird die App nur ausgeblendet.
+- Tabs of a blocked site that are already open may keep working until reloaded, because browsers cache connections.
+- The shortcuts are fixed to `⌃⌥N` and `⌃⌥T`.
+- Apps with unsaved documents ask before quitting; if you decline, FocusFlow only hides them.
