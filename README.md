@@ -106,3 +106,7 @@ Data lives in `~/Library/Application Support/FocusFlow/`.
 - Tabs of a blocked site that are already open may keep working until reloaded, because browsers cache connections.
 - The shortcuts are fixed to `⌃⌥N` and `⌃⌥T`.
 - Apps with unsaved documents ask before quitting; if you decline, FocusFlow only hides them.
+
+## License
+
+[MIT](LICENSE)
