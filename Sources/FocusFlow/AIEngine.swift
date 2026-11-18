@@ -265,6 +265,18 @@ final class AIEngine {
         }
     }
 
+    /// Classifies visible text with the local Ollama model: the project it is about and the words that
+    /// identify it. Nil when no model is ready, no project clearly fits, or the answer is unusable.
+    /// The text is never stored.
+    func classifyProject(in text: String, projects: [Project]) async -> ProjectClassification? {
+        guard settings.provider == .ollama || (settings.provider == .automatic && !appleStatus.isAvailable),
+              ollamaStatus.isReady, !projects.isEmpty, let client = ollama else { return nil }
+        let request = ProjectClassifier.request(text: text, projects: projects)
+        guard let reply = try? await client.chat(system: request.system, user: request.user, schema: request.schema)
+        else { return nil }
+        return ProjectClassifier.parse(reply, text: text, projects: projects)
+    }
+
     func refine(_ note: String) async -> (todos: [RefinedTodo], usedAI: Bool) {
         let provider = effectiveProvider, started = Date()
         var todos: [RefinedTodo]?

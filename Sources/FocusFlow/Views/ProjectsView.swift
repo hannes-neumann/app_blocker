@@ -51,7 +51,7 @@ struct ProjectsOverviewPage: View {
                     .card()
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
-                        ForEach(state.projects.projects) { ProjectCard(project: $0) }
+                        ForEach(state.projects.active) { ProjectCard(project: $0) }
                         Button { creating = true } label: {
                             VStack(spacing: 8) {
                                 Image(systemName: "plus").font(.title2)
@@ -64,6 +64,13 @@ struct ProjectsOverviewPage: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                    }
+                    let finished = state.projects.projects.filter(\.isFinished)
+                    if !finished.isEmpty {
+                        Text(L10n.text("finishedProjects")).font(.title3.weight(.semibold)).padding(.top, 6)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
+                            ForEach(finished) { ProjectCard(project: $0).opacity(0.6) }
+                        }
                     }
                     if month.totalMinutes >= 1 {
                         HStack(alignment: .top, spacing: 18) {
@@ -278,20 +285,38 @@ struct ProjectDetailPage: View {
             ProjectIcon(project: project, size: 48)
             VStack(alignment: .leading, spacing: 2) {
                 Text(project.name).font(.largeTitle.weight(.bold)).lineLimit(1)
-                let openCount = state.todos.open.filter { $0.projectID == project.id }.count
-                Text(L10n.text(openCount == 1 ? "openTasksOne" : "openTasksCount", openCount))
-                    .foregroundStyle(.secondary)
+                if let finishedAt = project.finishedAt {
+                    Label(L10n.text("finishedOn", finishedAt.formatted(date: .abbreviated, time: .omitted)),
+                          systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                } else {
+                    let openCount = state.todos.open.filter { $0.projectID == project.id }.count
+                    Text(L10n.text(openCount == 1 ? "openTasksOne" : "openTasksCount", openCount))
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer()
-            Button { state.startFocus(for: project, source: "project_page") } label: {
-                Label(L10n.text("startFocusForProject"), systemImage: "play.fill")
+            if project.isFinished {
+                Button { state.setProjectFinished(project.id, false) } label: {
+                    Label(L10n.text("reopenProject"), systemImage: "arrow.uturn.backward")
+                }
+                .controlSize(.large)
+            } else {
+                Button { state.startFocus(for: project, source: "project_page") } label: {
+                    Label(L10n.text("startFocusForProject"), systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(project.color)
+                .controlSize(.large)
+                .disabled(state.phase != .idle)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(project.color)
-            .controlSize(.large)
-            .disabled(state.phase != .idle)
             Menu {
                 Button(L10n.text("editProject") + "…") { editing = true }
+                if project.isFinished {
+                    Button(L10n.text("reopenProject")) { state.setProjectFinished(project.id, false) }
+                } else {
+                    Button(L10n.text("finishProject")) { state.setProjectFinished(project.id, true) }
+                }
                 Divider()
                 Button(L10n.text("deleteProject") + "…", role: .destructive) { confirmDelete = true }
             } label: {

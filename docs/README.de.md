@@ -4,18 +4,24 @@ Eine macOS-Menüleisten-App, die einen Pomodoro-Fokustimer mit App- und Webseite
 und spontane Gedanken während der Fokuszeit in konkrete Todos verwandelt, die dir in der nächsten
 passenden Pause vorgeschlagen werden.
 
+Alles läuft auf deinem Mac. Kein Konto, keine Cloud und keine Bildschirmaufnahme; die App sammelt keine
+Bildschirmpixel. Für die Zuordnung liest sie ausschließlich sichtbaren Text über die macOS-Bedienungshilfen
+und speichert diesen gelesenen Text nicht.
+
 ## Features
 
 - **Pomodoro-Timer** in der Menüleiste: Fokus, kurze und lange Pausen, Runden, Pause/Überspringen/Stopp.
-- **App-Blocker**: Ausgewählte Apps werden während der Fokuszeit beendet und beim erneuten Öffnen sofort wieder geschlossen.
-- **Webseiten-Blocker**: Domains werden systemweit über `/etc/hosts` gesperrt (gilt für alle Browser).
+- **Ausschlusslisten**: Ausgewählte Apps werden während der Fokuszeit beendet und beim erneuten Öffnen sofort wieder geschlossen. Für Websites sperrst du Domains systemweit über `/etc/hosts` (für alle Browser).
+- **Projekte und Aufgaben überschreiben die App-Liste**: Eine eigene App-Liste eines Projekts oder einer Aufgabe ersetzt die globale App-Liste während dieser Zielauswahl.
+- **Passwortgeschützte Webseiten-Sperre**: Für die Installation des kleinen Systemdienstes fragt macOS einmalig nach dem Admin-Passwort. Die Sperre gilt nur, solange FocusFlow läuft und eine Fokus-Session aktiv ist; beim Beenden oder Absturz verschwindet sie.
 - **Schnellnotiz** mit `⌃⌥N`: ein schwebendes Textfeld, egal in welcher App du gerade bist. Mit Enter speichern, mit Esc schließen.
 - **Timer-Shortcut** mit `⌃⌥T`: öffnet ein Eingabefenster für eine eigene Fokusdauer. Mit ↑↓ wählst du Projekt oder Aufgabe, mit ⇥ suchst du danach, mit Enter startet der Timer.
 - **KI-Aufbereitung**: Ein Sprachmodell auf deinem Mac (Apple Foundation Model oder ein Ollama-Modell) macht aus der Notiz ein oder mehrere konkrete Todos mit geschätzter Dauer.
 - **Pausenvorschlag**: Zu Beginn jeder Pause schlägt FocusFlow das längste offene Todo vor, das noch in die Pause passt.
 - **Dashboard**: ein eigenes Fenster mit Übersicht (Timer mit Projektwahl, Tagesziel, Wochenzahlen, Wochendiagramm nach Projekt, Insights, heutige Sessions, nächste Todos), Projekten, Todos, Insights und Einstellungen. Öffnest du es über „Dashboard“ im Menü.
-- **Projekte**: Projekte mit Farbe, Symbol und optionalem Wochenziel anlegen (Seitenleiste, Übersicht oder Menü). Vor dem Start wählst du ein Projekt und optional eine Aufgabe, die Session zählt dann für dieses Projekt. Sessions lassen sich nachträglich umhängen, z. B. in der Pause oder in der Session-Liste. Jede Projektseite zeigt Fokuszeit, Verlauf, Tageszeiten, Aufgaben mit Fokuszeit gegen Schätzung und eigene App-Sperrlisten. Regeln der Aufgabe überschreiben Projektregeln, ansonsten gilt die globale Regel.
-- **Automatische Zeiterfassung** (optional): erfasst die vordere App, das daneben sichtbare Fenster, Fenstertitel und Browser-Adressen und ordnet die Zeit über Regeln pro Projekt zu. Keine Bildschirmaufnahme, alles bleibt lokal.
+- **Projekte**: Projekte mit Farbe, Symbol und optionalem Wochenziel anlegen (Seitenleiste, Übersicht oder Menü). Vor dem Start wählst du ein Projekt und optional eine Aufgabe, die Session zählt dann für dieses Projekt. Sessions lassen sich nachträglich umhängen, z. B. in der Pause oder in der Session-Liste. Jede Projektseite zeigt Fokuszeit, Verlauf, Tageszeiten, Aufgaben mit Fokuszeit gegen Schätzung und eigene App-Sperrlisten. Projekte lassen sich über das …-Menü auf der Projektseite abschließen und wieder öffnen. Abgeschlossene Projekte behalten Verlauf und Statistik, erscheinen in der Übersicht unter „Abgeschlossene Projekte“ und nicht mehr in Auswahlmenüs (Timer, Todos, Zuordnung). Die automatische Erfassung ordnet ihnen keine Zeit mehr zu und Claude (MCP) sieht sie nicht mehr. Offene Todos bleiben unverändert. Regeln der Aufgabe überschreiben Projektregeln, ansonsten gilt die globale Regel.
+- **Automatische Zeiterfassung** (optional, auch außerhalb von Fokus-Sessions): erfasst die vordere App, das daneben sichtbare Fenster, Fenstertitel und Browser-Adressen und ordnet die Zeit außerhalb von Fokus-Sessions über Regeln den Projekten zu. Während einer Fokus-Session zählt die erfasste Zeit für das gewählte Projekt. Projekt-Namen im sichtbaren Accessibility-Text können ebenfalls einem Projekt zugeordnet werden – aber nur bei einem eindeutigen Treffer; bei mehrdeutigem Text bleibt die Aktivität ohne Projekt. Keine Bildschirmaufnahme, alles bleibt lokal.
+- **Text-Datenschutz**: Es wird kein Bildschirm aufgenommen und es werden keine Bildpunkte gesammelt. Passwortfelder (`AXSecureTextField`) werden nie gelesen; ausgeschlossene Apps werden vollständig übersprungen. Standardmäßig gehört dazu eine Ausschlussliste mit Passwort-Managern und privaten Nachrichten-Apps wie 1Password, Bitwarden, Schlüsselbundverwaltung, WhatsApp, Signal, Telegram, Discord und Nachrichten. Die Liste lässt sich in den Einstellungen bearbeiten. Gelesener Text wird nur für den Projekt-Abgleich verwendet und nicht gespeichert.
 - **Claude-Anbindung (MCP)**: Claude kann deine Todos und Projekte lesen, sie mit deinem Kalender zu Fokus-Blöcken einplanen und Todos anlegen, abhaken oder starten. Siehe unten.
 - **Insights**: Fokuszeit pro Tag nach Projekt mit Tagesziel, Trend zum Zeitraum davor, Zeit nach Projekt, Tageszeiten, Wochentage, Schätzgenauigkeit, Fokuszeit pro Aufgabe und alle Sessions, für 7, 30 oder 90 Tage, dazu automatisch formulierte Auffälligkeiten. Im Menü steht eine Kurzübersicht für heute.
 

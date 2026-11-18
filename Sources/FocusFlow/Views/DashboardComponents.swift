@@ -152,7 +152,7 @@ struct FocusTargetPicker: View {
             } else {
                 FlowLayout(spacing: 6) {
                         chip(nil)
-                        ForEach(state.projects.projects) { chip($0) }
+                        ForEach(state.projects.active) { chip($0) }
                         Button { creating = true } label: {
                             Label(L10n.text("newProject"), systemImage: "plus")
                                 .padding(.horizontal, 10).padding(.vertical, 5)
@@ -197,7 +197,7 @@ struct FocusTargetPicker: View {
         Menu {
             Button { state.selectedProjectID = nil } label: { Text(L10n.text("noProject")) }
             Divider()
-            ForEach(state.projects.projects) { project in
+            ForEach(state.projects.active) { project in
                 Button { state.selectedProjectID = project.id } label: { Text(project.name) }
             }
             Divider()
@@ -241,7 +241,7 @@ struct AssignProjectMenu<Label: View>: View {
                 Text(L10n.text("noProject"))
             }
             Divider()
-            ForEach(state.projects.projects) { project in
+            ForEach(state.projects.active) { project in
                 Button { state.stats.assign(record.id, to: project) } label: {
                     if record.projectID == project.id { Image(systemName: "checkmark") }
                     Text(project.name)

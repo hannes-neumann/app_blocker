@@ -4,15 +4,20 @@
 notes into estimated todos with a local language model, tracks time per project automatically, and lets Claude
 plan your todos into your calendar.
 
-Everything runs on your Mac. No account, no cloud, no screen recording.
+Everything runs on your Mac. No account, no cloud, no screen recording, and no collection of screen pixels.
+Tracking does not store the text it reads: it uses macOS Accessibility text only to match project names and
+automatically assign activity.
 
 > Deutsche Dokumentation mit allen Details: [docs/README.de.md](docs/README.de.md)
 
 ## Features
 
 - **Focus timer in the menu bar**: focus sessions, short and long breaks, rounds; pause, skip or stop.
-- **Blocking**: chosen apps are closed during focus; websites are blocked system-wide via `/etc/hosts` through a
-  small helper that only blocks while FocusFlow is running.
+- **Exclusion lists**: choose apps and websites to exclude while in focus. Project and task app lists can override
+  the global app list. Website domains are blocked system-wide via `/etc/hosts` through a small helper.
+- **Admin-password protected website blocking**: installing the helper requires your macOS admin password once.
+  It only adds the block while FocusFlow is running and in a focus session, and removes it when the app quits or
+  crashes.
 - **Keyboard first**: `⌃⌥N` opens a floating quick note anywhere; `⌃⌥T` starts a focus with your own duration and
   lets you pick a project or task with ↑↓ (or controls a running session).
 - **Local AI for todos**: a note like "prepare slides for monday" becomes one or more concrete todos with a time
@@ -20,10 +25,19 @@ Everything runs on your Mac. No account, no cloud, no screen recording.
   shortly before your next break, and the model is unloaded right after, so it costs little power and memory.
 - **Break suggestions**: each break suggests the longest open todo that still fits.
 - **Projects and insights**: colors, icons, weekly goals, focus time per project, estimate accuracy, best hours of
-  the day, and automatically worded observations.
-- **Automatic time tracking** (opt-in): rules by app, domain or window title assign your time to projects. It also
-  considers the window visible *next to* the front app, so a PDF beside a chat counts for the right project. It
-  only reads window metadata, never the screen.
+  the day, and automatically worded observations. Projects can be marked as finished or reopened from the …
+  menu on the project page. Finished projects keep their history and statistics and appear under “Finished
+  projects” in the overview, but no longer in selection menus (timer, todos, assignments). Automatic tracking no
+  longer assigns time to them, and Claude (MCP) no longer sees them. Open todos stay as they are.
+- **Automatic time tracking** (opt-in, outside focus too): rules by app, domain or window title assign your time
+  to projects outside focus sessions. During a focus session, the selected project receives the tracked time.
+  Project names in visible Accessibility text can also infer a project, but only on a unique match; ambiguous text
+  stays unassigned. It considers the window visible *next to* the front app, so a PDF beside a chat can count for
+  the right project.
+- **Text privacy**: no screen capture or pixel collection is used. Password fields (`AXSecureTextField`) are never
+  read, and excluded apps are skipped entirely. By default this includes password managers and private messaging
+  apps such as 1Password, Bitwarden, Keychain Access, WhatsApp, Signal, Telegram, Discord and Messages. You can
+  edit the exclusion list. Read text is used only for project matching and is never saved.
 - **Claude integration (MCP)**: a bundled MCP server lets Claude read your todos and focus history, plan them as
   focus blocks into free calendar slots, and add, complete or start todos.
 - **German and English** throughout.
