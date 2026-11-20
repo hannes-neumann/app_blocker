@@ -174,3 +174,23 @@ func parseDuration(_ input: String) -> Int? {
     }
     return nil
 }
+
+/// Parses the compact focus field where plain numbers are always minutes.
+func parseFocusDuration(_ input: String) -> Int? {
+    let text = input.trimmingCharacters(in: .whitespaces)
+    guard !text.isEmpty else { return nil }
+
+    if let minutes = Int(text), minutes > 0 {
+        return minutes
+    }
+
+    let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+    guard parts.count == 2,
+          let hours = Int(parts[0]),
+          let minutes = Int(parts[1]),
+          hours >= 0,
+          minutes >= 0,
+          minutes < 60 else { return nil }
+    let total = hours * 60 + minutes
+    return total > 0 ? total : nil
+}

@@ -121,6 +121,7 @@ final class PanelController {
             .environment(state))
         projectPanel.position(verticalFraction: 0.3)
         projectPanel.makeKeyAndOrderFront(nil)
+        projectPanel.orderFrontRegardless()
     }
 
     func showBreak() {

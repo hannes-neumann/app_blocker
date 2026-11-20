@@ -20,11 +20,11 @@ struct TimerControls: View {
                     .onSubmit { start(source: "enter") }
                     .onChange(of: durationText) {
                         invalid = false
-                        if let minutes = parseDuration(durationText) { state.settings.focusMinutes = min(minutes, 180) }
+                        if let minutes = parseFocusDuration(durationText) { state.settings.focusMinutes = min(minutes, 180) }
                     }
                     .onChange(of: state.settings.focusMinutes, initial: true) { _, minutes in
                         // Keep what the user is typing; only refresh when the value came from elsewhere.
-                        if parseDuration(durationText) != minutes { durationText = formatMinutes(minutes) }
+                        if parseFocusDuration(durationText) != minutes { durationText = "\(minutes)" }
                     }
                 Button { start(source: "button") } label: {
                     Label(L10n.text("startFocus"), systemImage: "play.fill").frame(maxWidth: .infinity)
@@ -48,7 +48,7 @@ struct TimerControls: View {
     }
 
     private func start(source: String) {
-        guard parseDuration(durationText) != nil else {
+        guard parseFocusDuration(durationText) != nil else {
             invalid = true
             Analytics.track(.focusDurationInvalid, content: ["text": durationText])
             return

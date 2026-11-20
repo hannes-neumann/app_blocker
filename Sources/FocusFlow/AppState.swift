@@ -394,6 +394,7 @@ final class AppState {
     private func tick() {
         guard !isPaused, let endDate, phase != .idle else { return }
         remaining = max(0, endDate.timeIntervalSinceNow)
+        if phase.isBreak { refreshSuggestion() }
         if remaining == 0 { finishPhase() }
     }
 

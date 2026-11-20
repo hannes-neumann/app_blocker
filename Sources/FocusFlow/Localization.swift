@@ -142,7 +142,7 @@ enum L10n {
         , "estimateNoData": [.german: "Wähle beim Fokus eine Aufgabe und hake sie ab, dann siehst du hier, wie gut die Schätzungen passen.", .english: "Pick a task when you focus and check it off, then you will see how good the estimates are."]
         , "estimateTooHigh": [.german: "Aufgaben gehen schneller als geschätzt.", .english: "Tasks go faster than estimated."]
         , "estimateTooLow": [.german: "Aufgaben dauern länger als geschätzt. Plane etwas Puffer ein.", .english: "Tasks take longer than estimated. Plan some buffer."]
-        , "focusFieldHelp": [.german: "Fokuszeit, z. B. 25, 50 min, 1h oder 1:30. Enter startet.", .english: "Focus time, e.g. 25, 50 min, 1h or 1:30. Return starts."]
+        , "focusFieldHelp": [.german: "Fokuszeit in Minuten, z. B. 45 oder 1:05. Enter startet.", .english: "Focus time in minutes, e.g. 45 or 1:05. Return starts."]
         , "focusPerDay": [.german: "Fokuszeit pro Tag", .english: "Focus time per day"]
         , "focusSession": [.german: "Fokus-Session", .english: "Focus session"]
         , "focusThisWeek": [.german: "Fokus diese Woche", .english: "Focus this week"]

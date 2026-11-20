@@ -49,10 +49,13 @@ enum TodoRefiner {
         - Verwende nur, was in der Notiz steht. Erfinde keine Namen, Personen, Orte, Adressen oder Details.
         - Der Titel beschreibt dieselbe Aufgabe wie die Notiz, nur klarer formuliert. Ersetze sie nicht durch
           einen anderen Schritt (aus "Flug buchen" wird "Flug nach Berlin buchen", nicht "Flugpreise vergleichen").
-        - Zerlege jede Aufgabe gedanklich in 2 bis 5 kleine Arbeitsschritte und schätze für jeden Schritt,
-          wie viele Minuten eine geübte Person realistisch braucht. Sei genau, runde nicht auf 5er-Schritte.
-          Rechne Wege, Warten und Vorbereitung mit ein. Bei großen Aufgaben (Präsentation, Kapitel überarbeiten,
-          Feature bauen) dauern einzelne Schritte oft 20 bis 60 Minuten, bei kleinen (Mail, Anruf) nur 1 bis 5.
+        - Schätze die gesamte Aufgabe für eine geübte Person konservativ und in möglichst wenigen Minuten.
+          Zerlege nur dann in mehrere Schritte, wenn die Notiz ausdrücklich mehrere Aufgaben nennt oder die
+          Aufgabe ohne Zerlegung nicht verständlich wäre. Erfinde keine Vorbereitung, Wege, Wartezeit oder
+          Nachbereitung. Kleine Routinen wie E-Mails prüfen, eine kurze Nachricht schreiben oder kurz anrufen
+          dauern meist 1 bis 3 Minuten insgesamt, nicht pro Unterschritt. Runde nicht auf 5er-Schritte auf.
+          Größere Aufgaben (Präsentation, Kapitel überarbeiten, Feature bauen) dürfen länger dauern, aber
+          schätze nur die konkret genannte Arbeit.
         - Antworte ausschließlich mit JSON ohne weiteren Text, z. B.:
           {"todos": [{"name": "Rechnung an Kunde X schicken", "parts": [
             {"description": "Rechnung im Ordner suchen", "minutes": 2},
@@ -154,7 +157,7 @@ enum TodoRefiner {
     // MARK: - Fallback
 
     private static let keywordEstimates: [(keywords: [String], minutes: Int)] = [
-        (["mail", "e-mail", "nachricht", "antworten", "schreib", "whatsapp", "slack"], 5),
+        (["mail", "e-mail", "email", "nachricht", "antworten", "schreib", "whatsapp", "slack"], 3),
         (["anruf", "anrufen", "telefon", "call"], 10),
         (["kaufen", "bestellen", "buchen", "überweis", "bezahl"], 10),
         (["aufräumen", "putzen", "wäsche", "abwasch"], 15),

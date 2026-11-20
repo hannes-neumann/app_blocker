@@ -14,7 +14,7 @@ struct TodoRefinerTests {
     @Test func heuristicCleansTitleAndGuesses() {
         let mail = TodoRefiner.heuristic("mail an anna schreiben")
         #expect(mail.title == "Mail an anna schreiben")
-        #expect(mail.minutes == 5)
+        #expect(mail.minutes == 3)
         let typed = TodoRefiner.heuristic("präsentation vorbereiten (40 min)")
         #expect(typed.title == "Präsentation vorbereiten")
         #expect(typed.minutes == 40)
