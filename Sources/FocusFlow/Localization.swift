@@ -47,6 +47,7 @@ enum L10n {
         "breakSuggestion": [.german: "Vorschlag für die Pause", .english: "Break suggestion"],
         "statistics": [.german: "Statistik", .english: "Statistics"],
         "done": [.german: "Erledigt", .english: "Done"],
+        "openDashboard": [.german: "Dashboard öffnen", .english: "Open dashboard"],
         "dashboard": [.german: "Dashboard", .english: "Dashboard"],
         "quit": [.german: "Beenden", .english: "Quit"],
         "add": [.german: "Hinzufügen", .english: "Add"],

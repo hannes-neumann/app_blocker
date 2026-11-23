@@ -1,6 +1,11 @@
 import AppKit
 import SwiftUI
 
+/// Takes the click that first reaches a panel, instead of spending it on focusing the panel.
+private final class PanelHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 /// A borderless floating panel that can take keyboard input without activating the app,
 /// so the app you were working in stays in front.
 final class FloatingPanel: NSPanel {
@@ -33,7 +38,7 @@ final class FloatingPanel: NSPanel {
     }
 
     func setContent<V: View>(_ view: V) {
-        let hosting = NSHostingView(rootView: view)
+        let hosting = PanelHostingView(rootView: view)
         contentView = hosting
         setContentSize(hosting.fittingSize)
     }
