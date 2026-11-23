@@ -4,9 +4,12 @@
 notes into estimated todos with a local language model, tracks time per project automatically, and lets Claude
 plan your todos into your calendar.
 
-Everything runs on your Mac. No account, no cloud, no screen recording, and no collection of screen pixels.
+Everything runs on your Mac. No account, no screen recording, and no collection of screen pixels.
 Tracking does not store the text it reads: it uses macOS Accessibility text only to match project names and
 automatically assign activity.
+
+Anonymous telemetry is opt-in and off by default; when enabled, it is sent to PostHog's EU free tier.
+See [PRIVACY.md](PRIVACY.md).
 
 > Deutsche Dokumentation mit allen Details: [docs/README.de.md](docs/README.de.md)
 
@@ -110,11 +113,14 @@ token that only your user can read.
 | AI | `AIEngine.swift`, `AIBatchQueue.swift`, `OllamaClient.swift`, `TodoRefiner.swift` |
 | Time tracking | `ActivityTracker.swift`, `Views/TrackingViews.swift` |
 | Insights and dashboard | `StatsStore.swift`, `Insights.swift`, `Views/` |
-| Local event log | `Analytics.swift` (JSON lines, size-capped, never leaves the Mac) |
+| Local event log | `Analytics.swift` (JSON lines, size-capped; optional anonymous telemetry is opt-in) |
 | Translations | `Localization.swift` |
 | MCP server | `Sources/FocusFlowMCP/main.swift` |
 
-Data lives in `~/Library/Application Support/FocusFlow/`.
+Data lives in `~/Library/Application Support/FocusFlow/`. GitHub Releases and Actions are free for this
+public repository. Builds are not notarized without a paid Apple Developer account; Apple's fee waiver
+does not cover individuals. On first launch choose **Open Anyway** under System Settings → Privacy &
+Security. Later Sparkle updates are verified with EdDSA signatures.
 
 ## Known limitations
 

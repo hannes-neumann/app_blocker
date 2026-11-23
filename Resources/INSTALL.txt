@@ -13,7 +13,8 @@ Alternativ im Terminal:
     xattr -dr com.apple.quarantine /Applications/FocusFlow.app
 
 FocusFlow erscheint danach oben in der Menüleiste. Läuft auf macOS 14 oder neuer.
-Alles bleibt auf deinem Mac: Notizen, Statistiken und Logs werden nur lokal gespeichert.
+Notizen, Statistiken und lokale Logs bleiben auf deinem Mac. Optionale Telemetrie ist standardmäßig
+ausgeschaltet und wird nur nach deiner Zustimmung anonym an PostHog (EU) gesendet; Details stehen in PRIVACY.md.
 
 
 Installing FocusFlow
@@ -31,4 +32,5 @@ Alternatively, in Terminal:
     xattr -dr com.apple.quarantine /Applications/FocusFlow.app
 
 FocusFlow then shows up in the menu bar. Runs on macOS 14 or later.
-Everything stays on your Mac: notes, statistics and logs are only stored locally.
+Notes, statistics and local logs stay on your Mac. Optional telemetry is off by default and only sent
+anonymously to PostHog (EU) after you opt in; see PRIVACY.md for details.

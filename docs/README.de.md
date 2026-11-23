@@ -4,9 +4,12 @@ Eine macOS-Menüleisten-App, die einen Pomodoro-Fokustimer mit App- und Webseite
 und spontane Gedanken während der Fokuszeit in konkrete Todos verwandelt, die dir in der nächsten
 passenden Pause vorgeschlagen werden.
 
-Alles läuft auf deinem Mac. Kein Konto, keine Cloud und keine Bildschirmaufnahme; die App sammelt keine
+Alles läuft auf deinem Mac. Kein Konto und keine Bildschirmaufnahme; die App sammelt keine
 Bildschirmpixel. Für die Zuordnung liest sie ausschließlich sichtbaren Text über die macOS-Bedienungshilfen
 und speichert diesen gelesenen Text nicht.
+
+Anonyme Telemetrie ist standardmäßig deaktiviert und wird nur nach deiner Zustimmung an die kostenlose
+PostHog-EU-Stufe gesendet. Details: [PRIVACY.md](../PRIVACY.md).
 
 ## Features
 
@@ -133,6 +136,10 @@ sich per Klick auf das Zeit-Badge ändern, entweder über eine Vorauswahl oder m
 als Text („25“, „45 min“, „1h“, „1,5h“, „1:30“).
 
 Daten (Einstellungen, Projekte, Todos und Fokus-Sessions) liegen in `~/Library/Application Support/FocusFlow/`.
+GitHub Releases und Actions sind für öffentliche Repositories kostenlos. Ohne kostenpflichtiges Apple-
+Entwicklerprogramm ist die App nicht notarisiert; Apples Gebührenerlass gilt nicht für Einzelpersonen.
+Beim ersten Start musst du sie unter Systemeinstellungen → Datenschutz & Sicherheit mit „Dennoch öffnen“
+freigeben. Spätere Sparkle-Updates werden mit EdDSA verifiziert.
 
 **Protokoll:** Jede Bedienung wird als eine JSON-Zeile in `Logs/events-JJJJ-MM-TT.jsonl` im selben Ordner
 gespeichert (abschaltbar und löschbar unter Einstellungen → Allgemein, Dateien älter als 180 Tage werden
