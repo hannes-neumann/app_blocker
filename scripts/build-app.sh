@@ -12,7 +12,8 @@ OUT="${FOCUSFLOW_BUILD_DIR:-build}"
 IDENTITY="${FOCUSFLOW_SIGN_IDENTITY:--}"
 APP="$OUT/FocusFlow.app"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
+SPARKLE_FRAMEWORKS=()
 
 if [ "${FOCUSFLOW_UNIVERSAL:-0}" = 1 ]; then
     # `swift build --arch` for several architectures needs a full Xcode, so build each one and merge them.
@@ -21,6 +22,7 @@ if [ "${FOCUSFLOW_UNIVERSAL:-0}" = 1 ]; then
         for arch in arm64 x86_64; do
             swift build -c release --triple "$arch-apple-macosx14.0" --product "$product"
             parts+=("$(swift build -c release --triple "$arch-apple-macosx14.0" --show-bin-path)/$product")
+            SPARKLE_FRAMEWORKS+=("$(find .build -type d -path "*/$arch-apple-macosx*/Sparkle.framework" | head -1)")
         done
         lipo -create "${parts[@]}" -output "$APP/Contents/MacOS/$product"
     done
@@ -30,8 +32,26 @@ else
     cp "$BIN_DIR/FocusFlow" "$APP/Contents/MacOS/FocusFlow"
     # MCP server for Claude, see Settings → General → Claude.
     cp "$BIN_DIR/focusflow-mcp" "$APP/Contents/MacOS/focusflow-mcp"
+    SPARKLE_FRAMEWORKS+=("$(find .build -type d -path "*/Sparkle.framework" | head -1)")
 fi
+SPARKLE="${SPARKLE_FRAMEWORKS[0]}"
+[ -n "$SPARKLE" ] && [ -d "$SPARKLE" ] || { echo "Sparkle.framework not found" >&2; exit 1; }
+ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
+if [ "${FOCUSFLOW_UNIVERSAL:-0}" = 1 ]; then
+    lipo -create \
+        "${SPARKLE_FRAMEWORKS[0]}/Versions/A/Sparkle" \
+        "${SPARKLE_FRAMEWORKS[1]}/Versions/A/Sparkle" \
+        -output "$APP/Contents/Frameworks/Sparkle.framework/Versions/A/Sparkle"
+fi
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/FocusFlow"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+VERSION="${FOCUSFLOW_VERSION:-0.1.0}"
+BUILD_NUMBER="${FOCUSFLOW_BUILD_NUMBER:-$(git rev-list --count HEAD)}"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" \
+    -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist"
+if [ -n "${FOCUSFLOW_SPARKLE_PUBLIC_KEY:-}" ]; then
+    /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey $FOCUSFLOW_SPARKLE_PUBLIC_KEY" "$APP/Contents/Info.plist"
+fi
 # What was built, for `focusflow status`. A "+" marks changes that are not committed.
 COMMIT="$(git rev-parse --short=10 HEAD 2>/dev/null || echo unknown)"
 [ -z "$(git status --porcelain 2>/dev/null)" ] || COMMIT="$COMMIT+"
@@ -51,8 +71,14 @@ if [ "$IDENTITY" != "-" ]; then
     # A real certificate keeps the signature the same across builds, so macOS keeps the granted permissions.
     SIGN+=(--options runtime --timestamp=none)
 fi
+# Sparkle embeds signed helpers; sign innermost code before the framework itself.
+while IFS= read -r helper; do
+    "${SIGN[@]}" "$helper" >/dev/null
+done < <(find "$APP/Contents/Frameworks/Sparkle.framework" -type d \( -name "*.xpc" -o -name "*.app" \) -prune -print)
+"${SIGN[@]}" "$APP/Contents/Frameworks/Sparkle.framework" >/dev/null
 "${SIGN[@]}" "$APP/Contents/MacOS/focusflow-mcp" >/dev/null
 "${SIGN[@]}" --entitlements Resources/FocusFlow.entitlements "$APP" >/dev/null
+codesign --verify --deep --strict "$APP"
 
 echo "Gebaut: $APP"
 echo "Starten mit: open $APP"

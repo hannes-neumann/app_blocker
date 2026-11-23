@@ -5,5 +5,8 @@
     <!-- The hardened runtime blocks Apple Events without this; time tracking asks browsers for the active tab. -->
     <key>com.apple.security.automation.apple-events</key>
     <true/>
+    <!-- No Apple Team ID in contributor builds; allow the embedded Sparkle framework. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
 </dict>
 </plist>

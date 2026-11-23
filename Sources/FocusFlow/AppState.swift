@@ -19,6 +19,7 @@ final class AppState {
     let ai = AIEngine()
     let aiQueue = AIBatchQueue()
     let activity = ActivityTracker()
+    let updater = Updater()
 
     private(set) var phase: Phase = .idle
     private(set) var remaining: TimeInterval = 0
@@ -128,6 +129,7 @@ final class AppState {
 
     func setup() {
         L10n.language = settings.language
+        updater.start(for: self)
         panels = PanelController(state: self)
         ai.refreshStatus()
         todos.refiner = { [ai] note in await ai.refine(note) }
