@@ -17,7 +17,19 @@ struct FocusFlowApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let state = AppState()
+    let state: AppState
+    private let instanceLock: InstanceLock
+
+    override init() {
+        // Before AppState, which already reads and writes the data files.
+        guard let lock = InstanceLock() else {
+            NSLog("FocusFlow is already running, quitting this copy")
+            exit(0)
+        }
+        instanceLock = lock
+        state = AppState()
+        super.init()
+    }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         // focusflow:// links, e.g. from calendar events or the MCP server. Registered this early so a link

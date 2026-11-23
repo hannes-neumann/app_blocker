@@ -32,6 +32,11 @@ else
     cp "$BIN_DIR/focusflow-mcp" "$APP/Contents/MacOS/focusflow-mcp"
 fi
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+# What was built, for `focusflow status`. A "+" marks changes that are not committed.
+COMMIT="$(git rev-parse --short=10 HEAD 2>/dev/null || echo unknown)"
+[ -z "$(git status --porcelain 2>/dev/null)" ] || COMMIT="$COMMIT+"
+/usr/libexec/PlistBuddy -c "Add :FocusFlowCommit string $COMMIT" \
+    -c "Add :FocusFlowBuildDate string $(date '+%Y-%m-%d %H:%M:%S')" "$APP/Contents/Info.plist"
 ICONSET="$(mktemp -d "${TMPDIR:-/tmp}/FocusFlowIcon.XXXXXX.iconset")"
 trap 'rm -rf "$ICONSET"' EXIT
 sips -s format png Resources/FocusFlowIcon.svg --out "$ICONSET/icon_1024x1024.png" >/dev/null
