@@ -8,7 +8,8 @@ Everything runs on your Mac. No account, no screen recording, and no collection 
 Tracking does not store the text it reads: it uses macOS Accessibility text only to match project names and
 automatically assign activity.
 
-Anonymous telemetry is opt-in and off by default; when enabled, it is sent to PostHog's EU free tier.
+Pseudonymous telemetry uses a random, resettable identifier; it is opt-in and off by default. When enabled,
+events are sent to PostHog's EU free tier.
 See [PRIVACY.md](PRIVACY.md).
 
 > Deutsche Dokumentation mit allen Details: [docs/README.de.md](docs/README.de.md)
@@ -113,7 +114,7 @@ token that only your user can read.
 | AI | `AIEngine.swift`, `AIBatchQueue.swift`, `OllamaClient.swift`, `TodoRefiner.swift` |
 | Time tracking | `ActivityTracker.swift`, `Views/TrackingViews.swift` |
 | Insights and dashboard | `StatsStore.swift`, `Insights.swift`, `Views/` |
-| Local event log | `Analytics.swift` (JSON lines, size-capped; optional anonymous telemetry is opt-in) |
+| Local event log | `Analytics.swift` (JSON lines, size-capped; optional pseudonymous telemetry is opt-in) |
 | Translations | `Localization.swift` |
 | MCP server | `Sources/FocusFlowMCP/main.swift` |
 

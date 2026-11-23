@@ -2,31 +2,60 @@
 
 ## Einmalige Einrichtung
 
-1. Erstelle ein PostHog-Konto, wähle die EU-Region und aktiviere **Discard client IP data**. Kopiere den
-   Project Key (keine persönliche URL oder API-Secret).
-2. Installiere Swift 6 und die Sparkle-Artefakte (`swift build` genügt).
-3. Führe als Repository-Eigentümer `scripts/setup-release.sh` aus. Das Skript fragt vor jedem externen Schritt,
-   erzeugt ein zehn Jahre gültiges selbstsigniertes Zertifikat und Sparkle-EdDSA-Schlüssel und speichert die
-   GitHub-Secrets über `gh secret set`. Sichere `.p12` und den privaten Sparkle-Schlüssel offline: Bei Verlust
-   müssen Nutzer die App neu installieren beziehungsweise verlieren die Update-Vertrauenskette.
+1. Erstelle ein PostHog-Konto, wähle die EU-Region und aktiviere **Discard client IP data**. Kopiere nur den
+   Project Key (keine persönliche URL und kein API-Secret).
+2. Installiere Swift 6, die Xcode Command Line Tools und die Sparkle-Artefakte (`swift build`).
+3. Prüfe, dass `gh auth status` auf das öffentliche Repository zeigt, und führe als Eigentümer
+   `scripts/setup-release.sh` aus. Wähle ein Verzeichnis außerhalb des Repositorys für die Backups.
+4. Bestätige die Zertifikats- und Sparkle-Schritte einzeln. Das Skript erzeugt ein zehn Jahre gültiges
+   selbstsigniertes Zertifikat, prüft dessen p12-Import in einem temporären Schlüsselbund und verwendet
+   das Sparkle-Konto `focusflow-release` für EdDSA.
+5. Prüfe im Repository unter Settings → Secrets and variables → Actions, dass Zertifikat plus Passwort und
+   Sparkle Public plus Private Key jeweils zusammen aktualisiert wurden. Der Release-Workflow verlangt den
+   PostHog-Project-Key; lokale Contributor-Builds können ihn weiterhin weglassen.
+
+Bewahre p12, Passwort und Sparkle-Private-Key offline auf; bei Verlust des Zertifikats müssen Nutzer die
+App wegen einer neuen Signatur neu installieren, bei Verlust des Sparkle-Schlüssels muss ein neuer Schlüssel
+mit einer absichtlich unterbrochenen Update-Vertrauenskette eingeführt werden. Bei geplanter Rotation
+veröffentliche zuerst eine Version, die beide Update-Schlüssel unterstützt, falls die Sparkle-Konfiguration
+das zulässt; sonst ist eine Neuinstallation der sichere Übergang.
 
 Die kostenlose Infrastruktur besteht aus GitHub Releases und Actions (für öffentliche Repositories) sowie
-PostHogs kostenloser EU-Stufe. Ohne kostenpflichtiges Apple-Entwicklerprogramm gibt es keine Notarisierung;
-Apples Gebührenerlass gilt nicht für Einzelpersonen. Der erste Start braucht deshalb „Dennoch öffnen“ unter
-Systemeinstellungen → Datenschutz & Sicherheit. Danach prüft Sparkle Updates mit EdDSA.
+PostHogs kostenloser EU-Stufe. Ein GitHub Student Pack ist dafür nicht nötig und wird hier nicht als aktuelles
+Angebot versprochen. Ohne kostenpflichtiges Apple-Entwicklerprogramm gibt es keine Notarisierung; Apples
+Gebührenerlass gilt nicht für Einzelpersonen. Beim ersten Start wählen Nutzer deshalb „Dennoch öffnen“ unter
+Systemeinstellungen → Datenschutz & Sicherheit. Spätere Sparkle-Updates werden mit EdDSA verifiziert.
+
+## Dry Run
+
+Starte die Action unter **Actions → Release → Run workflow** mit einer bestehenden `X.Y.Z`-Version.
+Sie läuft mit Ad-hoc-Signatur ohne Secrets und lädt DMG und ZIP als Workflow-Artefakte hoch; sie erstellt
+keinen Release und veröffentlicht nichts. Prüfe die Artefakte lokal, bevor du einen annotierten Tag auf
+`main` erstellst.
 
 ## Jede Veröffentlichung
 
-1. Aktualisiere `CHANGELOG.md` und erhöhe die Version in `Resources/Info.plist`.
-2. Prüfe `scripts/test.sh` und `scripts/build-app.sh`.
-3. Erstelle und pushe den Tag `vX.Y.Z` auf `main`.
-4. Prüfe den Draft-Release, seine DMG/ZIP und `appcast.xml`; erst danach veröffentlicht die Action ihn.
+1. Ergänze einen Abschnitt `## X.Y.Z` in `CHANGELOG.md` und erhöhe die Version in `Resources/Info.plist`.
+2. Führe lokal `scripts/test.sh` und `FOCUSFLOW_SIGN_IDENTITY=- scripts/release.sh` aus.
+3. Erstelle und pushe einen **annotierten** Tag `vX.Y.Z` auf `main`.
+4. GitHub verlangt die `release`-Environment-Freigabe, bevor Zertifikat und Secrets verwendet werden. Nach
+   dieser Freigabe baut die Action, erstellt einen Draft mit DMG, ZIP und Appcast, lädt alles hoch und
+   veröffentlicht denselben Draft unmittelbar danach. Eine manuelle Prüfung zwischen Draft und Veröffentlichung
+   findet nicht statt; prüfe daher Changelog und Dry Run vorher.
+5. Nutzer sehen beim ersten Start „Open Anyway“; spätere Updates werden von Sparkle anhand der EdDSA-Signatur
+   geprüft und installiert.
 
-Telemetrie ist opt-in und standardmäßig aus. In PostHog sind Aktivierung, Retention nach Version,
-abgeschlossene Fokus-Sessions und Abstürze nützliche Fragen. Personenbezogene Inhalte gehören nicht in
+Pseudonyme Telemetrie verwendet eine zufällige, zurücksetzbare ID, ist opt-in und standardmäßig aus. In
+PostHog sind Aktivierung, Retention nach Version, abgeschlossene Fokus-Sessions und Abstürze nützliche
+Fragen. Aktivierung lässt sich nach `app_version` und Installationsereignis, Retention nach erster Session,
+Fokusabschluss nach Session-Ende sowie Abstürze nach Version und macOS-Version aufschlüsseln. Die Crash-
+Auswertung steht in PostHog unter **Data → Insights** (und in **Error tracking**, falls aktiviert); sie
+enthält nur die von der App gesendeten pseudonymen Ereignisse. Personenbezogene Inhalte gehören nicht in
 Events; siehe [PRIVACY.md](../PRIVACY.md).
 
-## Rollback
+## Schlüsselverlust und Rollback
 
 Veröffentliche nie einen älteren Build erneut. Behebe das Problem und veröffentliche eine höhere Version;
-Sparkle kann so die fehlerhafte Version überholen. Bei einem fehlerhaften Draft lösche ihn vor der Veröffentlichung.
+Sparkle kann so die fehlerhafte Version überholen. Bei Verlust des Zertifikats oder privaten Sparkle-Schlüssels
+stoppe Releases, sichere die verbleibenden Backups und plane die nötige Neuinstallation beziehungsweise
+Schlüsselrotation ausdrücklich, statt Secrets halb zu ersetzen.

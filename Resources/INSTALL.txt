@@ -14,7 +14,8 @@ Alternativ im Terminal:
 
 FocusFlow erscheint danach oben in der Menüleiste. Läuft auf macOS 14 oder neuer.
 Notizen, Statistiken und lokale Logs bleiben auf deinem Mac. Optionale Telemetrie ist standardmäßig
-ausgeschaltet und wird nur nach deiner Zustimmung anonym an PostHog (EU) gesendet; Details stehen in PRIVACY.md.
+ausgeschaltet und wird nur nach deiner Zustimmung mit einer zufälligen, zurücksetzbaren ID pseudonymisiert
+an PostHog (EU) gesendet; Details stehen in PRIVACY.md.
 
 
 Installing FocusFlow
@@ -33,4 +34,4 @@ Alternatively, in Terminal:
 
 FocusFlow then shows up in the menu bar. Runs on macOS 14 or later.
 Notes, statistics and local logs stay on your Mac. Optional telemetry is off by default and only sent
-anonymously to PostHog (EU) after you opt in; see PRIVACY.md for details.
+with a random, resettable ID to PostHog (EU) after you opt in; see PRIVACY.md for details.

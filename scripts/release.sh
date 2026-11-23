@@ -18,23 +18,16 @@ fi
 
 VERSION="$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Resources/Info.plist)"
 VERSION="${FOCUSFLOW_VERSION:-$VERSION}"
-BUILD_NUMBER="${FOCUSFLOW_BUILD_NUMBER:-}"
 OUT=build/release
 APP="$OUT/FocusFlow.app"
 NAME="FocusFlow-$VERSION"
 
 FOCUSFLOW_BUILD_DIR="$OUT" FOCUSFLOW_SIGN_IDENTITY="$IDENTITY" FOCUSFLOW_UNIVERSAL=1 scripts/build-app.sh
 if [ -n "${FOCUSFLOW_VERSION:-}" ]; then
-    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $FOCUSFLOW_VERSION" "$APP/Contents/Info.plist"
+    ACTUAL_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")"
+    [ "$ACTUAL_VERSION" = "$FOCUSFLOW_VERSION" ] ||
+        { echo "build-app.sh produced version $ACTUAL_VERSION, expected $FOCUSFLOW_VERSION" >&2; exit 1; }
 fi
-if [ -n "$BUILD_NUMBER" ]; then
-    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist"
-fi
-codesign --force --sign "$IDENTITY" "$APP/Contents/MacOS/focusflow-mcp" >/dev/null
-if [ "$IDENTITY" != "-" ]; then
-    codesign --force --sign "$IDENTITY" --options runtime --timestamp=none "$APP/Contents/MacOS/focusflow-mcp" >/dev/null
-fi
-codesign --force --sign "$IDENTITY" --entitlements Resources/FocusFlow.entitlements "$APP" >/dev/null
 codesign --verify --strict --verbose=1 "$APP"
 
 rm -f "$OUT/$NAME.zip" "$OUT/$NAME.dmg"

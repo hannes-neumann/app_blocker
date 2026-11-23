@@ -8,8 +8,8 @@ Alles läuft auf deinem Mac. Kein Konto und keine Bildschirmaufnahme; die App sa
 Bildschirmpixel. Für die Zuordnung liest sie ausschließlich sichtbaren Text über die macOS-Bedienungshilfen
 und speichert diesen gelesenen Text nicht.
 
-Anonyme Telemetrie ist standardmäßig deaktiviert und wird nur nach deiner Zustimmung an die kostenlose
-PostHog-EU-Stufe gesendet. Details: [PRIVACY.md](../PRIVACY.md).
+Pseudonyme Telemetrie mit einer zufälligen, zurücksetzbaren ID ist standardmäßig deaktiviert und wird nur
+nach deiner Zustimmung an die kostenlose PostHog-EU-Stufe gesendet. Details: [PRIVACY.md](../PRIVACY.md).
 
 ## Features
 
