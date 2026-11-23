@@ -94,6 +94,7 @@ jobs:
           for name in POSTHOG_KEY SPARKLE_PUBLIC_KEY SPARKLE_PRIVATE_KEY CERT CERT_PASSWORD; do
             [ -n "${!name}" ] || { echo "Missing required secret: $name" >&2; exit 1; }
           done
+          ! grep -q TODO PRIVACY.md || { echo "PRIVACY.md still has TODOs" >&2; exit 1; }
           echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
           NOTES_FILE="$RUNNER_TEMP/focusflow-release-notes.md"

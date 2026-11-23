@@ -5,15 +5,16 @@
 1. Erstelle ein PostHog-Konto, wähle die EU-Region und aktiviere **Discard client IP data**. Kopiere nur den
    Project Key (keine persönliche URL und kein API-Secret).
 2. Installiere Swift 6, die Xcode Command Line Tools und die Sparkle-Artefakte (`swift build`).
-3. Prüfe, dass `gh auth status` auf das öffentliche Repository zeigt, und führe als Eigentümer
+3. Erstelle unter **Settings → Environments** die Umgebung `release`, füge dich als erforderlichen Reviewer hinzu und
+   erlaube nur Tags nach `v*`. Das muss vor dem Setup-Skript passieren, weil es die Secrets dort ablegt.
+4. Prüfe, dass `gh auth status` auf das öffentliche Repository zeigt, und führe als Eigentümer
    `scripts/setup-release.sh` aus. Wähle ein Verzeichnis außerhalb des Repositorys für die Backups.
-4. Bestätige die Zertifikats- und Sparkle-Schritte einzeln. Das Skript erzeugt ein zehn Jahre gültiges
+5. Bestätige die Zertifikats- und Sparkle-Schritte einzeln. Das Skript erzeugt ein zehn Jahre gültiges
    selbstsigniertes Zertifikat, prüft dessen p12-Import in einem temporären Schlüsselbund und verwendet
    das Sparkle-Konto `focusflow-release` für EdDSA.
-5. Erstelle unter **Settings → Environments** die Umgebung `release`, füge einen erforderlichen Reviewer hinzu
-   und beschränke die Deployment-Branch-Regel auf Tags nach `v*`. Prüfe unter den Environment-Secrets, dass
-   Zertifikat plus Passwort und Sparkle Public plus Private Key jeweils zusammen aktualisiert wurden. Der
-   Release-Workflow verlangt den PostHog-Project-Key; lokale Contributor-Builds können ihn weiterhin weglassen.
+6. Prüfe danach die Environment-Secrets: Zertifikat plus Passwort und Sparkle Public plus Private Key müssen jeweils
+   gemeinsam gesetzt sein. Der Release-Workflow verlangt auch den PostHog-Key.
+7. Trage in `PRIVACY.md` Kontakt und Speicherdauer ein.
 
 Bewahre p12, Passwort und Sparkle-Private-Key offline auf; bei Verlust des Zertifikats müssen Nutzer die
 App wegen einer neuen Signatur neu installieren. Bei Verlust des Sparkle-Schlüssels muss die

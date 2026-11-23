@@ -261,28 +261,32 @@ final class LocalFileSink: AnalyticsSink {
 struct AnalyticsSettings: Codable {
     var enabled = true
     var installID = UUID()
+    /// Sending usage data to PostHog is off until the user agrees; independent of `enabled`, the local log.
     var telemetryEnabled = false
+    /// Random, only for sent events, so they cannot be matched to the local log.
     var telemetryID = UUID()
-    var telemetryConsentAsked = false
-    var telemetryPolicyVersion = 0
+    /// The privacy policy the user answered to, 0 when never asked.
+    var telemetryPolicy = 0
+
+    var telemetryAllowed: Bool { telemetryEnabled && telemetryPolicy == RemoteTelemetry.policyVersion }
 
     init() {}
 
+    // Field by field, so the install ID and an opt-out saved by older versions survive new fields.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         installID = try c.decodeIfPresent(UUID.self, forKey: .installID) ?? UUID()
         telemetryEnabled = try c.decodeIfPresent(Bool.self, forKey: .telemetryEnabled) ?? false
         telemetryID = try c.decodeIfPresent(UUID.self, forKey: .telemetryID) ?? UUID()
-        telemetryConsentAsked = try c.decodeIfPresent(Bool.self, forKey: .telemetryConsentAsked) ?? false
-        telemetryPolicyVersion = try c.decodeIfPresent(Int.self, forKey: .telemetryPolicyVersion) ?? 0
+        telemetryPolicy = try c.decodeIfPresent(Int.self, forKey: .telemetryPolicy) ?? 0
     }
 }
 
 /// Records what the user does, for improving the app with real usage data.
 ///
-/// Call `Analytics.track` from anywhere on the main actor. To send events to a backend later, implement
-/// `AnalyticsSink` (dropping `content`, and asking the user first) and add it in `Analytics.sinks`.
+/// Call `Analytics.track` from anywhere on the main actor. `sinks` keep events on this Mac; `remote` sends the part
+/// `RemoteContract` allows, only after the user agreed.
 @MainActor
 enum Analytics {
     static var settings: AnalyticsSettings = {
@@ -301,58 +305,40 @@ enum Analytics {
 
     static func start() {
         launchedAt = Date()
-        if !settings.telemetryEnabled {
-            try? FileManager.default.removeItem(at: Storage.directory.appendingPathComponent("telemetry-queue.json"))
-        }
-        if settings.telemetryEnabled, let remote = PostHogAnalyticsSink() {
-            sinks.append(remote)
-        }
+        // Written once, so the telemetry ID stays the same for settings saved by older versions.
+        Storage.save(settings, to: "analytics.json")
+        guard let key = RemoteTelemetry.bundledKey else { return }
+        remote = RemoteTelemetry(key: key, transport: PostHogTransport(), queueURL: RemoteTelemetry.defaultQueueURL,
+                                 isAllowed: { settings.telemetryAllowed }, telemetryID: { settings.telemetryID })
+        remote?.startTimer()
     }
+    /// Nil in builds without a PostHog key: those never send anything.
+    static var remote: RemoteTelemetry?
     static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 
     static func track(_ name: AnalyticsEventName, _ properties: AnalyticsProperties = [:], content: [String: String]? = nil) {
+        remote?.record(name, properties)
+        guard settings.enabled else { return }
         let event = AnalyticsEvent(name: name, sessionID: sessionID, installID: settings.installID,
                                    appVersion: appVersion, properties: properties, content: content)
-        sinks.forEach { sink in
-            if sink is LocalFileSink {
-                guard settings.enabled else { return }
-            }
-            sink.record(event)
-        }
+        sinks.forEach { $0.record(event) }
     }
 
-    /// Remote sinks receive only this explicit, reviewed contract; local logs retain their detail.
-    static func sanitize(_ name: AnalyticsEventName, _ properties: AnalyticsProperties) -> AnalyticsProperties {
-        guard let allowed = RemoteTelemetry.allowlist(name) else { return [:] }
-        return properties.filter { key, value in
-            guard let kind = allowed[key] else { return false }
-            switch (kind, value) {
-            case (.int, .int(let value)): return (0...1_000_000).contains(value)
-            case (.bool, .bool): return true
-            case (.intOrBool, .int(let value)): return (0...1_000_000).contains(value)
-            case (.intOrBool, .bool): return true
-            case (.oneOf(let values), .string(let value)): return values.contains(value)
-            default: return false
-            }
-        }
+    static func answerTelemetry(_ allowed: Bool) {
+        settings.telemetryEnabled = allowed
+        settings.telemetryPolicy = RemoteTelemetry.policyVersion
+        // Also on a yes: nothing from before the answer may be sent.
+        remote?.clear()
+    }
+
+    /// Unsent events go too, or they would link the old ID to the new one.
+    static func resetTelemetryID() {
+        settings.telemetryID = UUID()
+        remote?.clear()
     }
 
     static func flush() {
         sinks.forEach { $0.flush() }
-    }
-
-    static func resetTelemetryIdentity() {
-        settings.telemetryID = UUID()
-        sinks.compactMap { $0 as? PostHogAnalyticsSink }.forEach { $0.resetIdentity() }
-    }
-
-    static func setTelemetryEnabled(_ enabled: Bool) {
-        settings.telemetryEnabled = enabled
-        if enabled {
-            if !sinks.contains(where: { $0 is PostHogAnalyticsSink }), let remote = PostHogAnalyticsSink() { sinks.append(remote) }
-        } else {
-            sinks.compactMap { $0 as? PostHogAnalyticsSink }.forEach { $0.disable() }
-        }
     }
 
     // MARK: - Settings changes

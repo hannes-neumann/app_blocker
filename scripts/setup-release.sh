@@ -25,7 +25,7 @@ echo "Back up the certificate and Sparkle private key: losing either means reins
 ask "Continue?" || exit 0
 read -r -p "Backup directory outside this repository (created 700): " BACKUP
 [ -n "$BACKUP" ] || { echo "A backup directory is required." >&2; exit 1; }
-case "$BACKUP" in "~"|"~/"*) BACKUP="$HOME/${BACKUP#\~/}";; esac
+case "$BACKUP" in "~") BACKUP="$HOME" ;; "~/"*) BACKUP="$HOME/${BACKUP#\~/}" ;; esac
 mkdir -p "$BACKUP"
 chmod 700 "$BACKUP"
 REPO_ROOT="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"

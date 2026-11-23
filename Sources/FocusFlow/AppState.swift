@@ -180,6 +180,14 @@ final class AppState {
         isSetUp = true
         pendingURLs.forEach(open)
         pendingURLs = []
+        askForTelemetryIfDue()
+    }
+
+    /// Only while idle, so the question never interrupts a session or a break.
+    private func askForTelemetryIfDue() {
+        guard RemoteTelemetry.shouldAsk(hasKey: Analytics.remote != nil, answeredPolicy: Analytics.settings.telemetryPolicy,
+                                        phase: phase) else { return }
+        panels.showTelemetryConsent()
     }
 
     /// Adds a rule and lets it sort the activity already recorded.
@@ -254,6 +262,7 @@ final class AppState {
         Analytics.flushChanges()
         Analytics.track(.appQuit, ["session_seconds": .int(Int(Date().timeIntervalSince(Analytics.launchedAt)))])
         Analytics.flush()
+        Analytics.remote?.flushOnQuit()
         activity.stop()
         appBlocker.stop()
         domainBlocker.setBlocking(false)
@@ -308,11 +317,13 @@ final class AppState {
         endBreak()
         applyBlocking(false)
         updater.phaseChanged(from: oldPhase, to: .idle)
+        askForTelemetryIfDue()
     }
 
     private func begin(_ newPhase: Phase, durationMinutes: Int? = nil, source: String) {
         let oldPhase = phase
         phase = newPhase
+        panels.hideTelemetryConsent()
         let duration = durationMinutes ?? minutes(for: newPhase)
         phaseDuration = TimeInterval(max(duration, 1) * 60)
         remaining = phaseDuration
@@ -359,6 +370,7 @@ final class AppState {
                 remaining = 0
                 endBreak()
                 updater.phaseChanged(from: oldPhase, to: .idle)
+                askForTelemetryIfDue()
             }
         case .idle:
             break

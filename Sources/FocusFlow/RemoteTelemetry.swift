@@ -1,237 +1,350 @@
 import Foundation
 
-enum TelemetryResult { case success, retry, drop }
-protocol TelemetryTransport: AnyObject {
-    func send(_ data: Data, completion: @escaping (TelemetryResult) -> Void)
+/// What may leave the Mac: per event, the properties and their kinds. Everything else is dropped.
+///
+/// There is no `default`, so a new event does not compile until someone decides what it may send.
+enum RemoteContract {
+    enum Kind {
+        case int, signedInt, bool, intOrBool
+        case oneOf(Set<String>)
+        case frames
+    }
+
+    private static let phases: Set<String> = ["idle", "focus", "shortBreak", "longBreak"]
+    private static let sections = Set(DashboardSection.allCases.map(\.rawValue))
+    private static let providers = Set(AIProvider.allCases.map(\.rawValue))
+    private static let ruleKinds = Set(TrackingRule.Kind.allCases.map(\.rawValue))
+    private static let via: Set<String> = ["hotkey", "escape"]
+    private static let sources: Set<String> = [
+        "auto", "break_suggestion", "button", "card", "dashboard", "enter", "hotkey", "link", "menu", "menu_streak",
+        "project_card", "project_page", "project_task", "projects", "quick_capture", "sidebar", "timer_entry",
+    ]
+    private static let settings: Set<String> = [
+        "logging.enabled", "mcp.config_copied",
+        "focus.language", "focus.focus_minutes", "focus.short_break_minutes", "focus.long_break_minutes",
+        "focus.sessions_until_long_break", "focus.auto_start_focus", "focus.daily_goal_minutes", "focus.block_domains",
+        "ai.provider", "ai.start_ollama",
+        "tracking.enabled", "tracking.window_titles", "tracking.browser_addresses", "tracking.idle_minutes",
+        "tracking.side_window", "tracking.detect_from_text",
+    ]
+
+    static func properties(of name: AnalyticsEventName) -> [String: Kind] {
+        switch name {
+        case .menuOpened, .breakPanelClosed, .timerEntryOpened:
+            ["phase": .oneOf(phases)]
+        case .dashboardOpened:
+            ["section": .oneOf(sections), "source": .oneOf(sources), "was_open": .bool]
+        case .dashboardSectionViewed:
+            ["section": .oneOf(sections)]
+        case .settingsTabViewed:
+            ["tab": .oneOf(["timer", "blocking", "general", "ai", "tracking"])]
+        case .statsRangeChanged:
+            ["days": .int]
+        case .appLaunched:
+            ["open_todos": .int, "focus_minutes": .int, "blocked_apps": .int, "blocked_domains": .int,
+             "ai_provider": .oneOf(providers), "tracking_enabled": .bool]
+        case .appQuit:
+            ["session_seconds": .int]
+        case .focusStarted, .breakStarted:
+            ["phase": .oneOf(phases), "planned_minutes": .int, "round": .int, "source": .oneOf(sources)]
+        case .focusEnded, .breakEnded:
+            ["phase": .oneOf(phases), "reason": .oneOf(["completed", "stopped", "skipped", "quit"]), "completed": .bool,
+             "planned_seconds": .int, "elapsed_seconds": .int, "wall_seconds": .int]
+        case .timerPaused:
+            ["phase": .oneOf(phases), "remaining_seconds": .int]
+        case .timerResumed:
+            ["phase": .oneOf(phases), "paused_seconds": .int]
+        case .timerEntryCancelled, .quickCaptureCancelled:
+            ["via": .oneOf(via)]
+        case .quickCaptureOpened, .projectOpened, .todoCompleted, .todoReopened, .todoDeleted:
+            ["source": .oneOf(sources)]
+        case .focusTaskSelected:
+            ["has_project": .bool]
+        case .noteCaptured:
+            ["source": .oneOf(sources), "length": .int, "open_todos": .int]
+        case .noteRefined:
+            ["used_ai": .bool, "duration_ms": .int, "waited_seconds": .int, "todo_count": .int]
+        case .todoEstimateChanged:
+            ["method": .oneOf(["menu", "typed"]), "old_minutes": .int, "new_minutes": .int]
+        case .todosCleared:
+            ["count": .int, "source": .oneOf(sources)]
+        case .todoListFilterChanged:
+            ["filter": .oneOf(["done", "open"])]
+        case .suggestionShown:
+            ["estimated_minutes": .int, "available_minutes": .int]
+        case .taskAdded:
+            ["estimated_minutes": .int, "source": .oneOf(sources)]
+        case .todoBlockedAppsChanged, .projectBlockedAppsChanged:
+            ["custom": .bool]
+        case .projectCreated, .projectDeleted, .blockedDomainAdded, .blockedDomainRemoved:
+            ["count": .int]
+        case .projectStyleChanged:
+            ["color_index": .int]
+        case .projectGoalChanged, .sessionProjectChanged, .trackedBlockAssigned:
+            ["minutes": .int]
+        case .trackingPermissionRequested:
+            ["permission": .oneOf(["accessibility"]), "granted": .bool]
+        case .trackingRuleAdded:
+            ["kind": .oneOf(ruleKinds), "count": .int]
+        case .trackingRuleRemoved:
+            ["kind": .oneOf(ruleKinds)]
+        case .appLinkOpened:
+            // The command is the host of a link and can be any text.
+            ["command": .oneOf(["focus", "add-todo", "complete", "quit"]), "trusted": .bool, "handled": .bool]
+        case .settingChanged:
+            ["setting": .oneOf(settings), "old_value": .intOrBool, "new_value": .intOrBool]
+        case .addDomainCancelled:
+            ["had_text": .bool]
+        case .helperInstalled, .helperUninstalled, .staleBlockRemoved:
+            ["success": .bool]
+        case .aiRequest:
+            ["provider": .oneOf(providers), "success": .bool, "duration_ms": .int]
+        case .aiBatchFinished:
+            ["trigger": .oneOf(["calm_window", "deadline", "waited"]), "jobs": .int, "duration_ms": .int]
+        case .ollamaStarted:
+            ["success": .bool, "duration_ms": .int]
+        case .modelPullFinished:
+            ["success": .bool, "duration_seconds": .int]
+        case .appCrashed:
+            ["exception_type": .signedInt, "exception_code": .signedInt, "signal": .signedInt, "crash_build": .int,
+             "frames": .frames]
+        case .dashboardClosed, .focusDurationInvalid, .focusProjectSelected, .todoTitleChanged, .suggestionSkipped,
+             .todoProjectChanged, .projectRenamed, .projectFinished, .projectReopened, .trackedDataDeleted,
+             .appBlocked, .blockedAppAdded, .blockedAppRemoved, .addDomainOpened, .addDomainInvalid, .modelPullStarted:
+            [:]
+        }
+    }
+
+    static func sanitize(_ name: AnalyticsEventName, _ values: AnalyticsProperties) -> AnalyticsProperties {
+        let allowed = properties(of: name)
+        return values.reduce(into: [:]) { result, entry in
+            guard let kind = allowed[entry.key] else { return }
+            switch (kind, entry.value) {
+            case (.int, .int(let v)), (.intOrBool, .int(let v)): result[entry.key] = .int(min(max(v, 0), 1_000_000))
+            case (.signedInt, .int), (.bool, .bool), (.intOrBool, .bool): result[entry.key] = entry.value
+            case (.oneOf(let set), .string(let v)) where set.contains(v): result[entry.key] = entry.value
+            case (.frames, .string(let v)) where CrashFrames.isValid(v): result[entry.key] = entry.value
+            default: break
+            }
+        }
+    }
 }
 
-final class URLSessionTelemetryTransport: TelemetryTransport {
-    private let session: URLSession
-    init(session: URLSession = .shared) { self.session = session }
+enum TelemetryResult { case success, retry, drop }
 
-    func send(_ data: Data, completion: @escaping (TelemetryResult) -> Void) {
-        guard let key = Bundle.main.object(forInfoDictionaryKey: "FocusFlowPostHogKey") as? String,
-              !key.isEmpty else { completion(.drop); return }
+/// Sends one HTTP body. The completion may run on any thread.
+protocol TelemetryTransport: AnyObject {
+    func send(_ body: Data, completion: @escaping @Sendable (TelemetryResult) -> Void)
+    func cancel()
+}
+
+final class PostHogTransport: TelemetryTransport {
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.httpCookieStorage = nil
+        config.urlCache = nil
+        config.timeoutIntervalForRequest = 20
+        return URLSession(configuration: config)
+    }()
+
+    func send(_ body: Data, completion: @escaping @Sendable (TelemetryResult) -> Void) {
         var request = URLRequest(url: URL(string: "https://eu.i.posthog.com/batch/")!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = data
+        // The default would name the exact system build.
+        request.setValue("FocusFlow", forHTTPHeaderField: "User-Agent")
+        request.httpBody = body
         session.dataTask(with: request) { _, response, _ in
-            guard let status = (response as? HTTPURLResponse)?.statusCode else { completion(.retry); return }
-            if (200..<300).contains(status) { completion(.success) }
-            else if status == 429 || status >= 500 { completion(.retry) }
-            else { completion(.drop) }
+            completion(Self.result(status: (response as? HTTPURLResponse)?.statusCode))
         }.resume()
+    }
+
+    func cancel() {
+        session.getAllTasks { $0.forEach { $0.cancel() } }
+    }
+
+    /// A body the server refuses would be refused again, so only temporary errors are retried.
+    static func result(status: Int?) -> TelemetryResult {
+        switch status {
+        case .some(200..<300): .success
+        case .some(400..<500) where status != 429 && status != 408: .drop
+        default: .retry
+        }
     }
 }
 
-@MainActor final class PostHogAnalyticsSink: AnalyticsSink {
-    private struct RemoteEvent: Codable {
+/// Sends allowed events to PostHog EU while the user agreed to it. Separate from the local log.
+@MainActor
+final class RemoteTelemetry {
+    /// Raise this when more data is sent than PRIVACY.md said before: everyone is asked again, and nothing is sent until then.
+    static let policyVersion = 1
+    static let maxQueued = 500
+    static let batchSize = 100
+
+    static var bundledKey: String? {
+        guard let key = Bundle.main.object(forInfoDictionaryKey: "FocusFlowPostHogKey") as? String, !key.isEmpty else { return nil }
+        return key
+    }
+
+    static var defaultQueueURL: URL { Storage.directory.appendingPathComponent("telemetry-queue.json") }
+
+    static func shouldAsk(hasKey: Bool, answeredPolicy: Int, phase: Phase) -> Bool {
+        hasKey && answeredPolicy < policyVersion && phase == .idle
+    }
+
+    struct Item: Codable, Equatable {
+        var uuid = UUID()
         let event: String
-        let properties: [String: RemoteValue]
-        let timestamp: Date
-        let uuid: UUID
+        /// Minutes since 1970.
+        let minute: Int
+        let session: UUID
+        let version: String
+        let language: String
+        var properties: AnalyticsProperties
     }
-    private struct Payload: Encodable {
-        let api_key: String
-        let batch: [RemoteEvent]
-    }
-    private let transport: TelemetryTransport
+
+    private(set) var queue: [Item] = []
     private let key: String
-    private var telemetryID: UUID
-    private var sessionID = UUID()
+    private let transport: TelemetryTransport
     private let queueURL: URL
-    private var events: [RemoteEvent] = []
-    private var timer: Timer?
-    private var inFlight = false
-    private var nextAttempt: Date = .distantPast
+    private let clock: () -> Date
+    private let isAllowed: () -> Bool
+    private let telemetryID: () -> UUID
+    private var session = UUID()
+    private var sending = false
+    private var nextAttempt = Date.distantPast
     private var retryDelay: TimeInterval = 30
-    private var clock: () -> Date
+    /// Changes when the queue is cleared, so a request still under way cannot touch the new one.
+    private var generation = 0
+    private var timer: Timer?
 
-    init?(key: String? = nil, transport: TelemetryTransport = URLSessionTelemetryTransport(),
-          queueURL: URL = Storage.directory.appendingPathComponent("telemetry-queue.json"),
-          clock: @escaping () -> Date = Date.init) {
-        let resolvedKey = key ?? (Bundle.main.object(forInfoDictionaryKey: "FocusFlowPostHogKey") as? String)
-        guard let resolvedKey, !resolvedKey.isEmpty else { return nil }
-        self.key = resolvedKey
-        self.telemetryID = Analytics.settings.telemetryID
-        self.queueURL = queueURL
+    init(key: String, transport: TelemetryTransport, queueURL: URL, clock: @escaping () -> Date = Date.init,
+         isAllowed: @escaping () -> Bool, telemetryID: @escaping () -> UUID) {
+        self.key = key
         self.transport = transport
+        self.queueURL = queueURL
         self.clock = clock
-        events = (try? JSONDecoder().decode([RemoteEvent].self, from: Data(contentsOf: queueURL))) ?? []
-        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.flush() }
+        self.isAllowed = isAllowed
+        self.telemetryID = telemetryID
+        if isAllowed() {
+            load()
+        } else {
+            clear()
+        }
     }
 
-    func record(_ event: AnalyticsEvent) {
-        guard Analytics.settings.telemetryEnabled else { return }
-        let language = L10n.language.rawValue
-        var properties: [String: RemoteValue] = [
-            "distinct_id": .string(telemetryID.uuidString),
-            "$session_id": .string(sessionID.uuidString),
-            "$process_person_profile": .bool(false),
-            "$geoip_disable": .bool(true),
-            "app_version": .string(event.appVersion),
-            "macos_version": .string("\(ProcessInfo.processInfo.operatingSystemVersion.majorVersion).\(ProcessInfo.processInfo.operatingSystemVersion.minorVersion)"),
-            "arch": .string(ProcessInfo.processInfo.machineArchitecture),
-            "language": .string(language)
-        ]
-        Analytics.sanitize(event.name, event.properties).forEach { properties[$0.key] = RemoteValue($0.value) }
-        let date = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: event.timestamp)
-        let timestamp = Calendar.current.date(from: date) ?? event.timestamp
-        events.append(RemoteEvent(event: event.name.rawValue, properties: properties, timestamp: timestamp, uuid: event.id))
-        events = Array(events.suffix(500))
+    func startTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.flush() }
+        }
+    }
+
+    func record(_ name: AnalyticsEventName, _ properties: AnalyticsProperties) {
+        guard isAllowed() else { return }
+        queue.append(Item(event: name.rawValue, minute: Int((clock().timeIntervalSince1970 / 60).rounded(.down)),
+                          session: session, version: Self.safeVersion(Analytics.appVersion), language: L10n.language.rawValue,
+                          properties: RemoteContract.sanitize(name, properties)))
+        queue = Array(queue.suffix(Self.maxQueued))
         save()
     }
 
     func flush() {
-        guard Analytics.settings.telemetryEnabled, !inFlight, !events.isEmpty,
-              clock() >= nextAttempt else { return }
-        inFlight = true
-        let sending = Array(events.prefix(100))
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(Payload(api_key: key, batch: sending)) else { return }
-        transport.send(data) { [weak self] result in
-            Task { @MainActor in
-                guard let self else { return }
-                self.inFlight = false
-                guard Analytics.settings.telemetryEnabled else { return }
-                if result == .success || result == .drop {
-                    let sent = Set(sending.map(\.uuid))
-                    self.events.removeAll { sent.contains($0.uuid) }
-                    self.retryDelay = 30
-                    self.save()
-                } else {
-                    self.nextAttempt = self.clock().addingTimeInterval(self.retryDelay)
-                    self.retryDelay = min(self.retryDelay * 2, 3600)
-                }
+        guard let (items, body) = nextBatch() else { return }
+        sending = true
+        let generation = generation
+        transport.send(body) { [weak self] result in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.finish(items, result, generation) }
             }
         }
     }
 
-    func reset() {
-        events = []
-        inFlight = false
+    /// On quit: sends one batch and waits briefly. What does not make it is sent after the next launch.
+    func flushOnQuit(timeout: TimeInterval = 1) {
+        guard let (items, body) = nextBatch() else { return }
+        final class Box: @unchecked Sendable { var result = TelemetryResult.retry }
+        let box = Box(), done = DispatchSemaphore(value: 0)
+        transport.send(body) { box.result = $0; done.signal() }
+        if done.wait(timeout: .now() + timeout) == .success { finish(items, box.result, generation) }
+    }
+
+    /// Drops everything not sent yet and stops requests under way.
+    func clear() {
+        generation += 1
+        transport.cancel()
+        queue = []
+        sending = false
+        nextAttempt = .distantPast
+        retryDelay = 30
+        session = UUID()
         try? FileManager.default.removeItem(at: queueURL)
     }
 
-    func resetIdentity() {
-        telemetryID = Analytics.settings.telemetryID
-        sessionID = UUID()
+    private func nextBatch() -> (items: [Item], body: Data)? {
+        guard isAllowed(), !sending, !queue.isEmpty, clock() >= nextAttempt else { return nil }
+        let items = Array(queue.prefix(Self.batchSize))
+        guard let body = try? JSONSerialization.data(withJSONObject: ["api_key": key, "batch": items.map(payload)]) else { return nil }
+        return (items, body)
     }
 
-    func disable() {
-        reset()
-        timer?.invalidate()
-        timer = nil
+    private func finish(_ items: [Item], _ result: TelemetryResult, _ generation: Int) {
+        guard generation == self.generation else { return }
+        sending = false
+        if result == .retry {
+            nextAttempt = clock().addingTimeInterval(retryDelay)
+            retryDelay = min(retryDelay * 2, 3600)
+            return
+        }
+        let sent = Set(items.map(\.uuid))
+        queue.removeAll { sent.contains($0.uuid) }
+        retryDelay = 30
+        save()
+    }
+
+    private func payload(_ item: Item) -> [String: Any] {
+        let system = ProcessInfo.processInfo.operatingSystemVersion
+        #if arch(arm64)
+        let arch = "arm64"
+        #else
+        let arch = "x86_64"
+        #endif
+        var properties: [String: Any] = item.properties.mapValues { value -> Any in
+            switch value {
+            case .string(let v): v
+            case .int(let v): v
+            case .double(let v): v
+            case .bool(let v): v
+            }
+        }
+        properties["distinct_id"] = telemetryID().uuidString
+        properties["$session_id"] = item.session.uuidString
+        properties["$process_person_profile"] = false
+        properties["$geoip_disable"] = true
+        properties["app_version"] = item.version
+        properties["macos_version"] = "\(system.majorVersion).\(system.minorVersion)"
+        properties["arch"] = arch
+        properties["language"] = item.language
+        return ["event": item.event, "uuid": item.uuid.uuidString, "properties": properties,
+                "timestamp": ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: Double(item.minute) * 60))]
+    }
+
+    /// Checks the file like new events: an older version may have allowed more.
+    private func load() {
+        let saved = (try? JSONDecoder().decode([Item].self, from: Data(contentsOf: queueURL))) ?? []
+        queue = saved.suffix(Self.maxQueued).compactMap { item in
+            guard let name = AnalyticsEventName(rawValue: item.event), AppLanguage(rawValue: item.language) != nil else { return nil }
+            return Item(uuid: item.uuid, event: item.event, minute: item.minute, session: item.session,
+                        version: Self.safeVersion(item.version), language: item.language,
+                        properties: RemoteContract.sanitize(name, item.properties))
+        }
     }
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(events) else { return }
+        guard let data = try? JSONEncoder().encode(queue) else { return }
         try? data.write(to: queueURL, options: .atomic)
     }
-}
 
-enum RemoteValue: Codable, Equatable {
-    case string(String), int(Int), double(Double), bool(Bool)
-    init(_ value: AnalyticsValue) {
-        switch value {
-        case .string(let value): self = .string(value)
-        case .int(let value): self = .int(value)
-        case .double(let value): self = .double(value)
-        case .bool(let value): self = .bool(value)
-        }
-    }
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
-        switch self {
-        case .string(let value): try c.encode(value)
-        case .int(let value): try c.encode(value)
-        case .double(let value): try c.encode(value)
-        case .bool(let value): try c.encode(value)
-        }
-    }
-    init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if let value = try? c.decode(Bool.self) { self = .bool(value) }
-        else if let value = try? c.decode(Int.self) { self = .int(value) }
-        else if let value = try? c.decode(Double.self) { self = .double(value) }
-        else { self = .string(try c.decode(String.self)) }
+    private static func safeVersion(_ text: String) -> String {
+        text.range(of: #"^[0-9]{1,4}(\.[0-9]{1,4}){1,2}\z"#, options: .regularExpression) != nil ? text : "dev"
     }
 }
-
-private extension ProcessInfo {
-    var machineArchitecture: String {
-        #if arch(arm64)
-        return "arm64"
-        #else
-        return "x86_64"
-        #endif
-    }
-}
-
-enum RemoteTelemetry {
-    enum Kind: Equatable {
-        case int, bool, intOrBool, oneOf(Set<String>)
-    }
-
-    static func allowlist(_ name: AnalyticsEventName) -> [String: Kind]? {
-        let phases = Set(["idle", "focus", "shortBreak", "longBreak"])
-        let sources = Set(["hotkey", "escape", "button", "menu", "dashboard", "sidebar", "card", "break_suggestion"])
-        let sections = Set(["focus", "projects", "todos", "stats"])
-        let via = Set(["hotkey", "escape"])
-        let reasons = Set(["completed", "stopped", "skipped", "quit"])
-        let providers = Set(["automatic", "ollama", "off"])
-        let kinds = Set(["app", "domain", "title", "learned"])
-        switch name {
-        case .menuOpened, .breakPanelClosed, .timerEntryOpened: return ["phase": .oneOf(phases)]
-        case .dashboardOpened: return ["section": .oneOf(sections), "source": .oneOf(sources), "was_open": .bool]
-        case .dashboardSectionViewed: return ["section": .oneOf(sections)]
-        case .settingsTabViewed: return ["tab": .oneOf(Set(["timer", "blocking", "general", "ai", "tracking"]))]
-        case .statsRangeChanged: return ["days": .int]
-        case .dashboardClosed: return [:]
-        case .appLaunched: return ["open_todos": .int, "focus_minutes": .int, "blocked_apps": .int, "blocked_domains": .int, "ai_provider": .oneOf(providers), "tracking_enabled": .bool]
-        case .appQuit: return ["session_seconds": .int]
-        case .focusStarted, .breakStarted: return ["phase": .oneOf(phases), "planned_minutes": .int, "round": .int, "source": .oneOf(sources)]
-        case .focusEnded, .breakEnded: return ["phase": .oneOf(phases), "reason": .oneOf(reasons), "completed": .bool, "planned_seconds": .int, "elapsed_seconds": .int, "wall_seconds": .int]
-        case .timerPaused: return ["phase": .oneOf(phases), "remaining_seconds": .int]
-        case .timerResumed: return ["phase": .oneOf(phases), "paused_seconds": .int]
-        case .timerEntryCancelled, .quickCaptureCancelled: return ["via": .oneOf(via)]
-        case .quickCaptureOpened: return ["source": .oneOf(sources)]
-        case .focusDurationInvalid, .focusProjectSelected, .appBlocked, .todoTitleChanged,
-             .suggestionSkipped, .projectRenamed, .projectFinished, .projectReopened, .trackedDataDeleted,
-             .blockedAppAdded, .blockedAppRemoved, .addDomainOpened, .addDomainInvalid, .modelPullStarted: return [:]
-        case .focusTaskSelected: return ["has_project": .bool]
-        case .noteCaptured: return ["source": .oneOf(sources), "length": .int, "open_todos": .int]
-        case .noteRefined: return ["used_ai": .bool, "duration_ms": .int, "waited_seconds": .int, "todo_count": .int]
-        case .todoCompleted, .todoReopened, .todoDeleted: return ["source": .oneOf(sources)]
-        case .todoEstimateChanged: return ["method": .oneOf(Set(["manual", "ai"])), "old_minutes": .int, "new_minutes": .int]
-        case .todosCleared: return ["count": .int, "source": .oneOf(sources)]
-        case .todoListFilterChanged: return ["filter": .oneOf(Set(["done", "open"]))]
-        case .suggestionShown: return ["estimated_minutes": .int, "available_minutes": .int]
-        case .taskAdded: return ["estimated_minutes": .int, "source": .oneOf(sources)]
-        case .todoProjectChanged: return [:]
-        case .todoBlockedAppsChanged, .projectBlockedAppsChanged: return ["custom": .bool]
-        case .projectCreated, .projectDeleted: return ["count": .int]
-        case .projectStyleChanged: return ["color_index": .int]
-        case .projectGoalChanged: return ["minutes": .int]
-        case .sessionProjectChanged: return ["minutes": .int]
-        case .projectOpened: return ["source": .oneOf(sources)]
-        case .trackingPermissionRequested: return ["permission": .oneOf(Set(["accessibility"])), "granted": .bool]
-        case .trackingRuleAdded: return ["kind": .oneOf(kinds), "count": .int]
-        case .trackingRuleRemoved: return ["kind": .oneOf(kinds)]
-        case .trackedBlockAssigned: return ["minutes": .int, "old_assignment": .bool]
-        case .appLinkOpened: return ["command": .oneOf(Set(["focus", "add-todo", "complete", "quit"])), "trusted": .bool, "handled": .bool]
-        case .settingChanged: return ["setting": .oneOf(Set(["logging.enabled", "mcp.config_copied", "focus.focus_minutes", "focus.short_break_minutes", "focus.long_break_minutes", "focus.sessions_until_long_break", "focus.auto_start_focus", "focus.daily_goal_minutes", "ai.provider", "ai.start_ollama", "tracking.enabled"])), "old_value": .intOrBool, "new_value": .intOrBool]
-        case .blockedDomainAdded, .blockedDomainRemoved: return ["count": .int]
-        case .addDomainCancelled: return ["had_text": .bool]
-        case .helperInstalled, .helperUninstalled, .staleBlockRemoved: return ["success": .bool]
-        case .aiRequest: return ["provider": .oneOf(providers), "success": .bool, "duration_ms": .int]
-        case .aiBatchFinished: return ["trigger": .oneOf(Set(["manual", "focus", "break"])), "jobs": .int, "duration_ms": .int]
-        case .ollamaStarted: return ["success": .bool, "duration_ms": .int]
-        case .modelPullFinished: return ["success": .bool, "duration_seconds": .int]
-        case .appCrashed: return ["exception_type": .int, "exception_code": .int, "signal": .int, "frames": .oneOf(Set())]
-        }
-    }
-}
-

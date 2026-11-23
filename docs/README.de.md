@@ -151,9 +151,9 @@ alles andere ist frei von Inhalten. Auswerten lässt es sich z. B. so:
 cat ~/Library/Application\ Support/FocusFlow/Logs/*.jsonl | jq -s 'group_by(.name) | map({name: .[0].name, count: length})'
 ```
 
-Event-Namen und Schlüssel folgen den Regeln von Firebase Analytics (snake_case, höchstens 40 Zeichen). Für ein
-späteres Backend implementiert man `AnalyticsSink`, lässt dabei `content` weg, fragt die Nutzer vorher um
-Erlaubnis und hängt den Sink an `Analytics.sinks` an.
+**Nutzungsdaten:** Getrennt vom Protokoll und nur mit Zustimmung sendet `RemoteTelemetry.swift` Events an PostHog (EU).
+`RemoteContract` legt für jedes Event fest, was mitgeht; ein neues Event kompiliert erst, wenn das entschieden ist. Wird
+mehr gesendet als in [PRIVACY.md](../PRIVACY.md) steht, `policyVersion` erhöhen: Dann werden alle neu gefragt.
 
 ## Claude-Anbindung (MCP)
 
