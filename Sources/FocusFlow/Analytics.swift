@@ -263,7 +263,8 @@ struct AnalyticsSettings: Codable {
     var installID = UUID()
     var telemetryEnabled = false
     var telemetryID = UUID()
-    var telemetrySessionID = UUID()
+    var telemetryConsentAsked = false
+    var telemetryPolicyVersion = 0
 
     init() {}
 
@@ -273,7 +274,8 @@ struct AnalyticsSettings: Codable {
         installID = try c.decodeIfPresent(UUID.self, forKey: .installID) ?? UUID()
         telemetryEnabled = try c.decodeIfPresent(Bool.self, forKey: .telemetryEnabled) ?? false
         telemetryID = try c.decodeIfPresent(UUID.self, forKey: .telemetryID) ?? UUID()
-        telemetrySessionID = try c.decodeIfPresent(UUID.self, forKey: .telemetrySessionID) ?? UUID()
+        telemetryConsentAsked = try c.decodeIfPresent(Bool.self, forKey: .telemetryConsentAsked) ?? false
+        telemetryPolicyVersion = try c.decodeIfPresent(Int.self, forKey: .telemetryPolicyVersion) ?? 0
     }
 }
 
@@ -299,6 +301,9 @@ enum Analytics {
 
     static func start() {
         launchedAt = Date()
+        if !settings.telemetryEnabled {
+            try? FileManager.default.removeItem(at: Storage.directory.appendingPathComponent("telemetry-queue.json"))
+        }
         if settings.telemetryEnabled, let remote = PostHogAnalyticsSink() {
             sinks.append(remote)
         }
@@ -306,11 +311,14 @@ enum Analytics {
     static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 
     static func track(_ name: AnalyticsEventName, _ properties: AnalyticsProperties = [:], content: [String: String]? = nil) {
-        guard settings.enabled else { return }
-        let safeProperties = sanitize(name, properties)
         let event = AnalyticsEvent(name: name, sessionID: sessionID, installID: settings.installID,
-                                   appVersion: appVersion, properties: safeProperties, content: content)
-        sinks.forEach { $0.record(event) }
+                                   appVersion: appVersion, properties: properties, content: content)
+        sinks.forEach { sink in
+            if sink is LocalFileSink {
+                guard settings.enabled else { return }
+            }
+            sink.record(event)
+        }
     }
 
     /// Remote sinks receive only this explicit, reviewed contract; local logs retain their detail.
@@ -331,7 +339,6 @@ enum Analytics {
 
     static func resetTelemetryIdentity() {
         settings.telemetryID = UUID()
-        settings.telemetrySessionID = UUID()
         sinks.compactMap { $0 as? PostHogAnalyticsSink }.forEach { $0.reset() }
     }
 
@@ -340,7 +347,7 @@ enum Analytics {
         if enabled {
             if !sinks.contains(where: { $0 is PostHogAnalyticsSink }), let remote = PostHogAnalyticsSink() { sinks.append(remote) }
         } else {
-            sinks.compactMap { $0 as? PostHogAnalyticsSink }.forEach { $0.reset() }
+            sinks.compactMap { $0 as? PostHogAnalyticsSink }.forEach { $0.disable() }
         }
     }
 

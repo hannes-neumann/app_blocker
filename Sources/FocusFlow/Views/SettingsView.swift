@@ -278,6 +278,7 @@ private struct GeneralSettingsView: View {
 
             ClaudeSection()
 
+            if Bundle.main.object(forInfoDictionaryKey: "FocusFlowPostHogKey") as? String != nil {
             Section(L10n.text("telemetry")) {
                 Toggle(L10n.text("telemetryOptIn"), isOn: $telemetryEnabled)
                     .onChange(of: telemetryEnabled) { Analytics.setTelemetryEnabled(telemetryEnabled) }
@@ -286,6 +287,7 @@ private struct GeneralSettingsView: View {
                     .foregroundStyle(.secondary)
                 Link(L10n.text("privacyPolicy"), destination: URL(string: "https://github.com/hannes-neumann/app_blocker/blob/main/PRIVACY.md")!)
                 Button(L10n.text("resetTelemetry")) { Analytics.resetTelemetryIdentity() }
+            }
             }
 
             Section {

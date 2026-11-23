@@ -21,11 +21,12 @@ final class URLSessionTelemetryTransport: TelemetryTransport {
     }
 }
 
-final class PostHogAnalyticsSink: AnalyticsSink {
+@MainActor final class PostHogAnalyticsSink: AnalyticsSink {
     private struct RemoteEvent: Codable {
         let event: String
         let properties: [String: AnyEncodable]
         let timestamp: Date
+        let id: UUID
     }
     private struct Payload: Encodable {
         let api_key: String
@@ -33,57 +34,86 @@ final class PostHogAnalyticsSink: AnalyticsSink {
     }
     private let transport: TelemetryTransport
     private let key: String
-    private let telemetryID: UUID
-    private let language: String
-    private let queueURL = Storage.directory.appendingPathComponent("telemetry-queue.json")
+    private var telemetryID: UUID
+    private var sessionID = UUID()
+    private let queueURL: URL
     private var events: [RemoteEvent] = []
     private var timer: Timer?
+    private var inFlight = false
+    private var backoff: TimeInterval = 0
+    private var clock: () -> Date
 
-    @MainActor init?(transport: TelemetryTransport = URLSessionTelemetryTransport()) {
-        guard let key = Bundle.main.object(forInfoDictionaryKey: "FocusFlowPostHogKey") as? String, !key.isEmpty else { return nil }
-        self.key = key
+    init?(key: String? = nil, transport: TelemetryTransport = URLSessionTelemetryTransport(),
+          queueURL: URL = Storage.directory.appendingPathComponent("telemetry-queue.json"),
+          clock: @escaping () -> Date = Date.init) {
+        let resolvedKey = key ?? (Bundle.main.object(forInfoDictionaryKey: "FocusFlowPostHogKey") as? String)
+        guard let resolvedKey, !resolvedKey.isEmpty else { return nil }
+        self.key = resolvedKey
         self.telemetryID = Analytics.settings.telemetryID
-        self.language = L10n.language.rawValue
+        self.queueURL = queueURL
         self.transport = transport
+        self.clock = clock
         events = (try? JSONDecoder().decode([RemoteEvent].self, from: Data(contentsOf: queueURL))) ?? []
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.flush() }
     }
 
     func record(_ event: AnalyticsEvent) {
+        guard Analytics.settings.telemetryEnabled else { return }
+        let language = L10n.language.rawValue
         var properties: [String: AnyEncodable] = [
             "distinct_id": AnyEncodable(telemetryID.uuidString),
+            "$session_id": AnyEncodable(sessionID.uuidString),
             "$process_person_profile": AnyEncodable(false),
             "$geoip_disable": AnyEncodable(true),
             "app_version": AnyEncodable(event.appVersion),
-            "macos_version": AnyEncodable(ProcessInfo.processInfo.operatingSystemVersionString.split(separator: ".").prefix(2).joined(separator: ".")),
+            "macos_version": AnyEncodable("\(ProcessInfo.processInfo.operatingSystemVersion.majorVersion).\(ProcessInfo.processInfo.operatingSystemVersion.minorVersion)"),
             "arch": AnyEncodable(ProcessInfo.processInfo.machineArchitecture),
             "language": AnyEncodable(language)
         ]
-        event.properties.forEach { properties[$0.key] = AnyEncodable($0.value) }
+        Analytics.sanitize(event.name, event.properties).forEach { properties[$0.key] = AnyEncodable($0.value) }
         let date = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: event.timestamp)
         let timestamp = Calendar.current.date(from: date) ?? event.timestamp
-        events.append(RemoteEvent(event: event.name.rawValue, properties: properties, timestamp: timestamp))
+        events.append(RemoteEvent(event: event.name.rawValue, properties: properties, timestamp: timestamp, id: event.id))
         events = Array(events.suffix(500))
         save()
     }
 
     func flush() {
-        guard !events.isEmpty else { return }
-        let sending = events
+        guard Analytics.settings.telemetryEnabled, !inFlight, !events.isEmpty,
+              backoff <= 0 else { return }
+        inFlight = true
+        let sending = Array(events.prefix(100))
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(Payload(api_key: key, batch: sending)) else { return }
         transport.send(data) { [weak self] success in
-            guard success else { return }
-            self?.events.removeFirst(min(sending.count, self?.events.count ?? 0))
-            self?.save()
+            Task { @MainActor in
+                guard let self else { return }
+                self.inFlight = false
+                guard Analytics.settings.telemetryEnabled else { return }
+                if success {
+                    let sent = Set(sending.map(\.id))
+                    self.events.removeAll { sent.contains($0.id) }
+                    self.backoff = 0
+                    self.save()
+                } else {
+                    self.backoff = min(max(self.backoff * 2, 1), 300)
+                }
+            }
         }
     }
 
     func reset() {
         events = []
+        telemetryID = UUID()
+        sessionID = UUID()
+        inFlight = false
+        timer?.invalidate()
+        timer = nil
         try? FileManager.default.removeItem(at: queueURL)
     }
+
+    func disable() { reset() }
 
     private func save() {
         guard let data = try? JSONEncoder().encode(events) else { return }
