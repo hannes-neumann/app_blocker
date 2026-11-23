@@ -4,9 +4,13 @@ import PackageDescription
 let package = Package(
     name: "FocusFlow",
     platforms: [.macOS(.v14)],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1"),
+    ],
     targets: [
         .executableTarget(
             name: "FocusFlow",
+            dependencies: [.product(name: "Sparkle", package: "Sparkle")],
             path: "Sources/FocusFlow",
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [

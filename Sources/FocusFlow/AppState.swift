@@ -19,6 +19,7 @@ final class AppState {
     let ai = AIEngine()
     let aiQueue = AIBatchQueue()
     let activity = ActivityTracker()
+    let updater = Updater()
 
     private(set) var phase: Phase = .idle
     private(set) var remaining: TimeInterval = 0
@@ -128,6 +129,7 @@ final class AppState {
 
     func setup() {
         L10n.language = settings.language
+        updater.start(for: self)
         panels = PanelController(state: self)
         ai.refreshStatus()
         todos.refiner = { [ai] note in await ai.refine(note) }
@@ -255,6 +257,7 @@ final class AppState {
         appBlocker.stop()
         domainBlocker.setBlocking(false)
         ai.shutdown()
+        updater.postponedInstallHandler = nil
     }
 
     // MARK: - Timer
@@ -296,15 +299,18 @@ final class AppState {
     func stop() {
         endPhase(reason: "stopped")
         ticker?.invalidate()
+        let oldPhase = phase
         phase = .idle
         remaining = 0
         isPaused = false
         completedFocusSessions = 0
         endBreak()
         applyBlocking(false)
+        updater.phaseChanged(from: oldPhase, to: .idle)
     }
 
     private func begin(_ newPhase: Phase, durationMinutes: Int? = nil, source: String) {
+        let oldPhase = phase
         phase = newPhase
         let duration = durationMinutes ?? minutes(for: newPhase)
         phaseDuration = TimeInterval(max(duration, 1) * 60)
@@ -329,6 +335,7 @@ final class AppState {
         } else {
             endBreak()
         }
+        updater.phaseChanged(from: oldPhase, to: newPhase)
     }
 
     private func finishPhase(playSound: Bool = true, reason: String = "completed") {
@@ -346,9 +353,11 @@ final class AppState {
             } else {
                 // Keep the round count so the next focus phase continues the cycle.
                 ticker?.invalidate()
+                let oldPhase = phase
                 phase = .idle
                 remaining = 0
                 endBreak()
+                updater.phaseChanged(from: oldPhase, to: .idle)
             }
         case .idle:
             break
