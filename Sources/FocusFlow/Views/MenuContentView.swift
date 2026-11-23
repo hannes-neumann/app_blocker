@@ -209,9 +209,11 @@ struct MenuContentView: View {
                 dismiss()
                 state.panels.showDashboard(.settings, source: "menu")
             }
-            Button(L10n.text("checkForUpdates")) {
-                dismiss()
-                state.updater.checkNow()
+            if state.updater.isEnabled {
+                Button(state.updater.pendingUpdate ? L10n.text("updateAvailable") : L10n.text("checkForUpdates")) {
+                    dismiss()
+                    state.updater.checkNow()
+                }
             }
             Spacer()
             Button(L10n.text("quit")) { NSApp.terminate(nil) }

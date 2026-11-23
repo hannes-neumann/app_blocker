@@ -257,6 +257,7 @@ final class AppState {
         appBlocker.stop()
         domainBlocker.setBlocking(false)
         ai.shutdown()
+        updater.phaseChanged(from: phase, to: .idle)
     }
 
     // MARK: - Timer
@@ -298,7 +299,9 @@ final class AppState {
     func stop() {
         endPhase(reason: "stopped")
         ticker?.invalidate()
+        let oldPhase = phase
         phase = .idle
+        updater.phaseChanged(from: oldPhase, to: .idle)
         remaining = 0
         isPaused = false
         completedFocusSessions = 0
@@ -307,7 +310,9 @@ final class AppState {
     }
 
     private func begin(_ newPhase: Phase, durationMinutes: Int? = nil, source: String) {
+        let oldPhase = phase
         phase = newPhase
+        updater.phaseChanged(from: oldPhase, to: newPhase)
         let duration = durationMinutes ?? minutes(for: newPhase)
         phaseDuration = TimeInterval(max(duration, 1) * 60)
         remaining = phaseDuration
@@ -348,7 +353,9 @@ final class AppState {
             } else {
                 // Keep the round count so the next focus phase continues the cycle.
                 ticker?.invalidate()
+                let oldPhase = phase
                 phase = .idle
+                updater.phaseChanged(from: oldPhase, to: .idle)
                 remaining = 0
                 endBreak()
             }

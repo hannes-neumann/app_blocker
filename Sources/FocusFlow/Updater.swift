@@ -1,20 +1,20 @@
 import Foundation
 import AppKit
-import Sparkle
+import Observation
+@preconcurrency import Sparkle
 
 /// Keeps update UI out of focus sessions and lets Sparkle finish on termination.
 @MainActor
-final class Updater: NSObject, ObservableObject {
-    private let defaults = UserDefaults.standard
+@Observable
+final class Updater: NSObject {
     private var controller: SPUStandardUpdaterController?
     private weak var state: AppState?
-
-    @Published private(set) var isEnabled = false
-    @Published private(set) var lastCheck: Date?
+    private(set) var isEnabled = false
+    private(set) var pendingUpdate = false
+    var postponedInstallHandler: (() -> Void)?
 
     override init() {
         super.init()
-        lastCheck = defaults.object(forKey: "FocusFlowUpdateLastCheck") as? Date
     }
 
     func start(for state: AppState) {
@@ -38,16 +38,28 @@ final class Updater: NSObject, ObservableObject {
         set { controller?.updater.automaticallyDownloadsUpdates = newValue }
     }
 
+    var lastUpdateCheckDate: Date? { controller?.updater.lastUpdateCheckDate }
+
     var currentVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
     }
 
     func checkNow() {
         guard isEnabled, Self.mayUpdateNow(phase: state?.phase ?? .idle), let controller else { return }
-        let now = Date()
-        lastCheck = now
-        defaults.set(now, forKey: "FocusFlowUpdateLastCheck")
+        pendingUpdate = false
         controller.checkForUpdates(nil)
+    }
+
+    func phaseChanged(from oldPhase: Phase, to newPhase: Phase) {
+        guard oldPhase == .focus, newPhase != .focus else { return }
+        if let handler = postponedInstallHandler {
+            postponedInstallHandler = nil
+            handler()
+        }
+        if pendingUpdate {
+            pendingUpdate = false
+            controller?.checkForUpdates(nil)
+        }
     }
 
     static func mayUpdateNow(phase: Phase) -> Bool {
@@ -56,8 +68,13 @@ final class Updater: NSObject, ObservableObject {
 }
 
 extension Updater: SPUUpdaterDelegate {
-    func updater(_ updater: SPUUpdater, shouldPostponeRelaunchForUpdate item: SUAppcastItem) -> Bool {
-        !Self.mayUpdateNow(phase: state?.phase ?? .idle)
+    func updater(_ updater: SPUUpdater, shouldPostponeRelaunchForUpdate item: SUAppcastItem,
+                 untilInvokingBlock installHandler: @escaping () -> Void) -> Bool {
+        guard !Self.mayUpdateNow(phase: state?.phase ?? .idle) else { return false }
+        if postponedInstallHandler == nil {
+            postponedInstallHandler = installHandler
+        }
+        return true
     }
 }
 
@@ -70,7 +87,19 @@ extension Updater: SPUStandardUserDriverDelegate {
         andInImmediateFocus _: Bool
     ) -> Bool {
         guard let state else { return true }
-        return Self.mayUpdateNow(phase: state.phase)
+        if !Self.mayUpdateNow(phase: state.phase) {
+            pendingUpdate = true
+            return false
+        }
+        return true
+    }
+
+    func standardUserDriverWillHandleShowingUpdate(
+        _ handleShowingUpdate: Bool,
+        forUpdate update: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+        if !handleShowingUpdate { pendingUpdate = true }
     }
 
     func standardUserDriverWillShowModalAlert() {

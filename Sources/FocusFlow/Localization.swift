@@ -40,6 +40,8 @@ enum L10n {
         "lastCheck": [.german: "Letzte Prüfung", .english: "Last check"],
         "checkForUpdates": [.german: "Nach Updates suchen", .english: "Check for updates"],
         "updatesOff": [.german: "Updates sind in diesem Build deaktiviert.", .english: "Updates are disabled in this build."],
+        "updatesDuringFocus": [.german: "Updates werden nach dem Fokus geprüft.", .english: "Updates will be checked after focus."],
+        "updateAvailable": [.german: "Update verfügbar", .english: "Update available"],
         "ai": [.german: "KI", .english: "AI"],
         "language": [.german: "Sprache", .english: "Language"],
         "german": [.german: "Deutsch", .english: "German"],

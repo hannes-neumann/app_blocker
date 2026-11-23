@@ -15,10 +15,18 @@ struct UpdatesSection: View {
                     set: { state.updater.automaticallyDownloads = $0 }
                 ))
                 LabeledContent(L10n.text("currentVersion"), value: state.updater.currentVersion)
-                if let lastCheck = state.updater.lastCheck {
+                if let lastCheck = state.updater.lastUpdateCheckDate {
                     LabeledContent(L10n.text("lastCheck"), value: lastCheck.formatted(date: .abbreviated, time: .shortened))
                 }
-                Button(L10n.text("checkForUpdates")) { state.updater.checkNow() }
+                Button(state.updater.pendingUpdate ? L10n.text("updateAvailable") : L10n.text("checkForUpdates")) {
+                    state.updater.checkNow()
+                }
+                .disabled(state.phase == .focus)
+                if state.phase == .focus {
+                    Text(L10n.text("updatesDuringFocus"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 Text(L10n.text("updatesOff")).foregroundStyle(.secondary)
             }
