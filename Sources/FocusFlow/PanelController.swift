@@ -10,6 +10,9 @@ private final class PanelHostingView<Content: View>: NSHostingView<Content> {
 /// so the app you were working in stays in front.
 final class FloatingPanel: NSPanel {
     var onCancel: (() -> Void)?
+    /// Sees every key before the content does; true means handled. macOS only lets Tab and the arrow keys reach
+    /// buttons with "Keyboard navigation" turned on, so a panel made of buttons needs this.
+    var onKey: ((NSEvent) -> Bool)?
 
     init(closesOnResignKey: Bool, movable: Bool = false) {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
@@ -31,6 +34,11 @@ final class FloatingPanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown, onKey?(event) == true { return }
+        super.sendEvent(event)
+    }
 
     override func cancelOperation(_ sender: Any?) {
         onCancel?()
@@ -97,8 +105,18 @@ final class PanelController {
         }
         Analytics.track(.timerEntryOpened, ["phase": .string(state.phase.rawValue)])
         let close = { [timerPanel] in timerPanel.orderOut(nil) }
+        timerPanel.onKey = nil
         guard state.phase == .idle else {
-            timerPanel.setContent(TimerSessionView(onClose: close).environment(state))
+            let selection = TimerSessionSelection()
+            let perform = { [state] (action: TimerSessionAction) in
+                switch action {
+                case .pause: state.togglePause()
+                case .skip: state.skipPhase(); close()
+                case .stop: state.stop(); close()
+                }
+            }
+            timerPanel.onKey = { selection.handle($0, perform: perform) }
+            timerPanel.setContent(TimerSessionView(selection: selection, perform: perform, onClose: close).environment(state))
             timerPanel.position(verticalFraction: 0.3)
             timerPanel.makeKeyAndOrderFront(nil)
             return
