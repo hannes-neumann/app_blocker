@@ -30,7 +30,7 @@ struct TodoStoreTests {
         store.capture("mail an anna schreiben", source: "test")
         let todo = try #require(store.todos.first)
         #expect(todo.isRefining)
-        #expect(todo.estimatedMinutes == 5)
+        #expect(todo.estimatedMinutes == 3)
         #expect(todo.title == "Mail an anna schreiben")
     }
 
