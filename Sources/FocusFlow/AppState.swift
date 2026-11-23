@@ -257,7 +257,7 @@ final class AppState {
         appBlocker.stop()
         domainBlocker.setBlocking(false)
         ai.shutdown()
-        updater.phaseChanged(from: phase, to: .idle)
+        updater.postponedInstallHandler = nil
     }
 
     // MARK: - Timer
@@ -301,18 +301,17 @@ final class AppState {
         ticker?.invalidate()
         let oldPhase = phase
         phase = .idle
-        updater.phaseChanged(from: oldPhase, to: .idle)
         remaining = 0
         isPaused = false
         completedFocusSessions = 0
         endBreak()
         applyBlocking(false)
+        updater.phaseChanged(from: oldPhase, to: .idle)
     }
 
     private func begin(_ newPhase: Phase, durationMinutes: Int? = nil, source: String) {
         let oldPhase = phase
         phase = newPhase
-        updater.phaseChanged(from: oldPhase, to: newPhase)
         let duration = durationMinutes ?? minutes(for: newPhase)
         phaseDuration = TimeInterval(max(duration, 1) * 60)
         remaining = phaseDuration
@@ -336,6 +335,7 @@ final class AppState {
         } else {
             endBreak()
         }
+        updater.phaseChanged(from: oldPhase, to: newPhase)
     }
 
     private func finishPhase(playSound: Bool = true, reason: String = "completed") {
@@ -355,9 +355,9 @@ final class AppState {
                 ticker?.invalidate()
                 let oldPhase = phase
                 phase = .idle
-                updater.phaseChanged(from: oldPhase, to: .idle)
                 remaining = 0
                 endBreak()
+                updater.phaseChanged(from: oldPhase, to: .idle)
             }
         case .idle:
             break

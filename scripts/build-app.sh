@@ -87,7 +87,7 @@ if [ "$IDENTITY" != "-" ] || [ "${FOCUSFLOW_RUNTIME:-0}" = 1 ]; then
 fi
 # Sparkle embeds signed helpers; sign innermost code before the framework itself.
 SPARKLE_VERSION="$FRAMEWORK/Versions/B"
-"${SIGN[@]}" "$SPARKLE_VERSION/XPCServices/Downloader.xpc" --preserve-metadata=entitlements >/dev/null
+"${SIGN[@]}" --preserve-metadata=entitlements "$SPARKLE_VERSION/XPCServices/Downloader.xpc" >/dev/null
 "${SIGN[@]}" "$SPARKLE_VERSION/XPCServices/Installer.xpc" >/dev/null
 "${SIGN[@]}" "$SPARKLE_VERSION/Autoupdate" >/dev/null
 "${SIGN[@]}" "$SPARKLE_VERSION/Updater.app" >/dev/null

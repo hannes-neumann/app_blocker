@@ -9,17 +9,19 @@ import Observation
 final class Updater: NSObject {
     private var controller: SPUStandardUpdaterController?
     private weak var state: AppState?
+    private let configuredPublicKey: String?
     private(set) var isEnabled = false
     private(set) var pendingUpdate = false
     var postponedInstallHandler: (() -> Void)?
 
-    override init() {
+    init(publicKey: String? = nil) {
+        configuredPublicKey = publicKey
         super.init()
     }
 
     func start(for state: AppState) {
         self.state = state
-        guard let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String,
+        guard let key = configuredPublicKey ?? Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String,
               !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let driver = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: self)
         controller = driver
@@ -52,6 +54,14 @@ final class Updater: NSObject {
 
     func phaseChanged(from oldPhase: Phase, to newPhase: Phase) {
         guard oldPhase == .focus, newPhase != .focus else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.deliverDeferredIfSafe(currentPhase: self.state?.phase ?? newPhase)
+        }
+    }
+
+    func deliverDeferredIfSafe(currentPhase: Phase) {
+        guard currentPhase != .focus else { return }
         if let handler = postponedInstallHandler {
             postponedInstallHandler = nil
             handler()
@@ -104,5 +114,13 @@ extension Updater: SPUStandardUserDriverDelegate {
 
     func standardUserDriverWillShowModalAlert() {
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
+        pendingUpdate = false
+    }
+
+    func standardUserDriverWillFinishUpdateSession() {
+        pendingUpdate = false
     }
 }
