@@ -27,6 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             exit(0)
         }
         instanceLock = lock
+        // Copies from before the lock do not know about it. They must be gone before the data is loaded.
+        OtherInstances.endAll()
         state = AppState()
         super.init()
     }
@@ -41,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         state.setup()
+        OtherInstances.keepAway()
     }
 
     @objc private func handleURLEvent(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
