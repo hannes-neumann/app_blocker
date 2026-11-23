@@ -44,8 +44,12 @@ struct BreakView: View {
                     .monospacedDigit()
                 Spacer()
                 Button { state.panels.dismissBreak() } label: {
+                    // A bigger target, so a near miss does not open the dashboard instead.
                     Image(systemName: "xmark").font(.caption.weight(.bold))
+                        .padding(8)
+                        .contentShape(Rectangle())
                 }
+                .padding(-8)
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
             }
@@ -75,6 +79,15 @@ struct BreakView: View {
         .padding(16)
         .frame(width: 360)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .contentShape(RoundedRectangle(cornerRadius: 14))
+        // The buttons inside keep their own clicks.
+        .onTapGesture { openDashboard() }
+        .help(L10n.text("openDashboard"))
+        .accessibilityAction(named: Text(L10n.text("openDashboard"))) { openDashboard() }
+    }
+
+    private func openDashboard() {
+        state.panels.showDashboard(.focus, source: "break_panel")
     }
 }
 

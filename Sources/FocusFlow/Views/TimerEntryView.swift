@@ -1,3 +1,5 @@
+import AppKit
+import Carbon
 import SwiftUI
 
 /// What a focus session counts for.
@@ -193,9 +195,44 @@ struct TimerEntryView: View {
     }
 }
 
+enum TimerSessionAction: CaseIterable {
+    case pause, skip, stop
+}
+
+/// The button the keyboard is on in the ⌃⌥T panel of a running phase.
+@MainActor @Observable
+final class TimerSessionSelection {
+    private(set) var action = TimerSessionAction.pause
+
+    /// Arrow keys and Tab move, ↩ and space press the button. Returns whether the key was used.
+    func handle(_ event: NSEvent, perform: (TimerSessionAction) -> Void) -> Bool {
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        let isTab = Int(event.keyCode) == kVK_Tab
+        guard modifiers.isEmpty || (isTab && modifiers == .shift) else { return false }
+        switch Int(event.keyCode) {
+        case kVK_RightArrow, kVK_DownArrow: move(1)
+        case kVK_LeftArrow, kVK_UpArrow: move(-1)
+        case kVK_Tab: move(modifiers == .shift ? -1 : 1)
+        case kVK_Return, kVK_ANSI_KeypadEnter, kVK_Space:
+            // Holding the key must not press the button again and again.
+            if !event.isARepeat { perform(action) }
+        default: return false
+        }
+        return true
+    }
+
+    private func move(_ step: Int) {
+        let all = TimerSessionAction.allCases
+        let index = all.firstIndex(of: action) ?? 0
+        action = all[(index + step + all.count) % all.count]
+    }
+}
+
 /// The ⌃⌥T panel while a phase is running: the time left and the controls, all reachable from the keyboard.
 struct TimerSessionView: View {
     @Environment(AppState.self) private var state
+    let selection: TimerSessionSelection
+    let perform: (TimerSessionAction) -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -224,26 +261,22 @@ struct TimerSessionView: View {
             ProgressView(value: state.progress)
                 .tint(state.phase.isBreak ? .green : state.selectedProject?.color ?? .accentColor)
             HStack(spacing: 8) {
-                Button { state.togglePause() } label: {
+                Button { perform(.pause) } label: {
                     Label(L10n.text(state.isPaused ? "resume" : "pause"), systemImage: state.isPaused ? "play.fill" : "pause.fill")
                         .frame(minWidth: 90)
                 }
-                .keyboardShortcut(.defaultAction)
-                Button {
-                    state.skipPhase()
-                    onClose()
-                } label: {
+                .overlay { ring(.pause) }
+                Button { perform(.skip) } label: {
                     Label(L10n.text("skip"), systemImage: "forward.end.fill")
                 }
                 .keyboardShortcut("s", modifiers: [])
+                .overlay { ring(.skip) }
                 Spacer()
-                Button(role: .destructive) {
-                    state.stop()
-                    onClose()
-                } label: {
+                Button(role: .destructive) { perform(.stop) } label: {
                     Label(L10n.text("stop"), systemImage: "stop.fill")
                 }
                 .keyboardShortcut(.delete, modifiers: [.command])
+                .overlay { ring(.stop) }
             }
             .controlSize(.large)
             Text(L10n.text("timerSessionFooter"))
@@ -254,5 +287,12 @@ struct TimerSessionView: View {
         .frame(width: 420)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
         .onExitCommand(perform: onClose)
+    }
+
+    private func ring(_ action: TimerSessionAction) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .strokeBorder(Color.accentColor, lineWidth: selection.action == action ? 2 : 0)
+            .padding(-3)
+            .allowsHitTesting(false)
     }
 }
