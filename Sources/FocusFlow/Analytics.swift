@@ -323,12 +323,16 @@ enum Analytics {
 
     /// Remote sinks receive only this explicit, reviewed contract; local logs retain their detail.
     static func sanitize(_ name: AnalyticsEventName, _ properties: AnalyticsProperties) -> AnalyticsProperties {
-        let allowed = RemoteTelemetry.allowlist[name] ?? []
+        guard let allowed = RemoteTelemetry.allowlist(name) else { return [:] }
         return properties.filter { key, value in
-            guard allowed.contains(key) else { return false }
-            switch value {
-            case .int, .double, .bool: return true
-            case .string(let value): return RemoteTelemetry.allowedStringValues[key]?.contains(value) == true
+            guard let kind = allowed[key] else { return false }
+            switch (kind, value) {
+            case (.int, .int(let value)): return (0...1_000_000).contains(value)
+            case (.bool, .bool): return true
+            case (.intOrBool, .int(let value)): return (0...1_000_000).contains(value)
+            case (.intOrBool, .bool): return true
+            case (.oneOf(let values), .string(let value)): return values.contains(value)
+            default: return false
             }
         }
     }
@@ -339,7 +343,7 @@ enum Analytics {
 
     static func resetTelemetryIdentity() {
         settings.telemetryID = UUID()
-        sinks.compactMap { $0 as? PostHogAnalyticsSink }.forEach { $0.reset() }
+        sinks.compactMap { $0 as? PostHogAnalyticsSink }.forEach { $0.resetIdentity() }
     }
 
     static func setTelemetryEnabled(_ enabled: Bool) {

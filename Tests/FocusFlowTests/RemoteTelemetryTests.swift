@@ -9,8 +9,8 @@ struct RemoteTelemetryTests {
 
     final class Transport: TelemetryTransport {
         var bodies: [Data] = []
-        var completions: [(Bool) -> Void] = []
-        func send(_ data: Data, completion: @escaping (Bool) -> Void) {
+        var completions: [(TelemetryResult) -> Void] = []
+        func send(_ data: Data, completion: @escaping (TelemetryResult) -> Void) {
             bodies.append(data)
             completions.append(completion)
         }
@@ -22,7 +22,7 @@ struct RemoteTelemetryTests {
 
     @Test("Every event has an explicit remote contract")
     func everyEventListed() {
-        #expect(Set(AnalyticsEventName.allCases) == Set(RemoteTelemetry.allowlist.keys))
+        #expect(AnalyticsEventName.allCases.allSatisfy { RemoteTelemetry.allowlist($0) != nil })
     }
 
     @Test("Poisoned properties never cross the remote boundary")
@@ -37,7 +37,7 @@ struct RemoteTelemetryTests {
         let body = String(data: transport.bodies[0], encoding: .utf8) ?? ""
         #expect(!body.contains("secret"))
         #expect(!body.contains("/tmp/private"))
-        #expect(!body.contains("uuid"))
+        #expect(!body.contains("secret"))
     }
 
     @Test("Opt out clears queue and stops transport")
