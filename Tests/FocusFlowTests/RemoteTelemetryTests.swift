@@ -134,7 +134,8 @@ final class RemoteTelemetryTests {
         #expect(remote.queue.isEmpty && transport.cancels == 1)
         allowed = true
         remote.record(.dashboardClosed, [:])
-        transport.pending[0](.success)
+        // A late failure of the old request must not delay the new queue.
+        transport.pending[0](.retry)
         await settle()
         #expect(remote.queue.map(\.event) == ["dashboard_closed"])
         remote.flush()
