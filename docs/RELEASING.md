@@ -10,15 +10,15 @@
 4. Bestätige die Zertifikats- und Sparkle-Schritte einzeln. Das Skript erzeugt ein zehn Jahre gültiges
    selbstsigniertes Zertifikat, prüft dessen p12-Import in einem temporären Schlüsselbund und verwendet
    das Sparkle-Konto `focusflow-release` für EdDSA.
-5. Prüfe im Repository unter Settings → Secrets and variables → Actions, dass Zertifikat plus Passwort und
-   Sparkle Public plus Private Key jeweils zusammen aktualisiert wurden. Der Release-Workflow verlangt den
-   PostHog-Project-Key; lokale Contributor-Builds können ihn weiterhin weglassen.
+5. Erstelle unter **Settings → Environments** die Umgebung `release`, füge einen erforderlichen Reviewer hinzu
+   und beschränke die Deployment-Branch-Regel auf Tags nach `v*`. Prüfe unter den Environment-Secrets, dass
+   Zertifikat plus Passwort und Sparkle Public plus Private Key jeweils zusammen aktualisiert wurden. Der
+   Release-Workflow verlangt den PostHog-Project-Key; lokale Contributor-Builds können ihn weiterhin weglassen.
 
 Bewahre p12, Passwort und Sparkle-Private-Key offline auf; bei Verlust des Zertifikats müssen Nutzer die
-App wegen einer neuen Signatur neu installieren, bei Verlust des Sparkle-Schlüssels muss ein neuer Schlüssel
-mit einer absichtlich unterbrochenen Update-Vertrauenskette eingeführt werden. Bei geplanter Rotation
-veröffentliche zuerst eine Version, die beide Update-Schlüssel unterstützt, falls die Sparkle-Konfiguration
-das zulässt; sonst ist eine Neuinstallation der sichere Übergang.
+App wegen einer neuen Signatur neu installieren. Bei Verlust des Sparkle-Schlüssels muss die
+Update-Vertrauenskette neu eingerichtet werden. Eine Zertifikatsrotation sollte deshalb erst nach
+vollständiger Sicherung des alten Zertifikats erfolgen.
 
 Die kostenlose Infrastruktur besteht aus GitHub Releases und Actions (für öffentliche Repositories) sowie
 PostHogs kostenloser EU-Stufe. Ein GitHub Student Pack ist dafür nicht nötig und wird hier nicht als aktuelles
@@ -38,8 +38,8 @@ keinen Release und veröffentlicht nichts. Prüfe die Artefakte lokal, bevor du 
 1. Ergänze einen Abschnitt `## X.Y.Z` in `CHANGELOG.md` und erhöhe die Version in `Resources/Info.plist`.
 2. Führe lokal `scripts/test.sh` und `FOCUSFLOW_SIGN_IDENTITY=- scripts/release.sh` aus.
 3. Erstelle und pushe einen **annotierten** Tag `vX.Y.Z` auf `main`.
-4. GitHub verlangt die `release`-Environment-Freigabe, bevor Zertifikat und Secrets verwendet werden. Nach
-   dieser Freigabe baut die Action, erstellt einen Draft mit DMG, ZIP und Appcast, lädt alles hoch und
+4. Die konfigurierte `release`-Environment-Freigabe durch den erforderlichen Reviewer wird nur für `v*`-Tags
+   wirksam. Nach dieser Freigabe baut die Action, erstellt einen Draft mit DMG, ZIP und Appcast, lädt alles hoch und
    veröffentlicht denselben Draft unmittelbar danach. Eine manuelle Prüfung zwischen Draft und Veröffentlichung
    findet nicht statt; prüfe daher Changelog und Dry Run vorher.
 5. Nutzer sehen beim ersten Start „Open Anyway“; spätere Updates werden von Sparkle anhand der EdDSA-Signatur

@@ -57,7 +57,7 @@ cat > "$OUT" <<EOF
       <sparkle:version>$BUILD_NUMBER</sparkle:version>
       <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <description sparkle:format="html">$NOTES_XML</description>
+      <description sparkle:format="markdown">$NOTES_XML</description>
       <enclosure url="$ESCAPE" length="$SIZE" type="application/octet-stream" sparkle:edSignature="$SIG_ESC"/>
     </item>
   </channel>

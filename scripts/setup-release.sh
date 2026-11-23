@@ -25,11 +25,44 @@ echo "Back up the certificate and Sparkle private key: losing either means reins
 ask "Continue?" || exit 0
 read -r -p "Backup directory outside this repository (created 700): " BACKUP
 [ -n "$BACKUP" ] || { echo "A backup directory is required." >&2; exit 1; }
+case "$BACKUP" in "~"|"~/"*) BACKUP="$HOME/${BACKUP#\~/}";; esac
 mkdir -p "$BACKUP"
 chmod 700 "$BACKUP"
+REPO_ROOT="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
+BACKUP="$(cd "$BACKUP" && pwd -P)"
+case "$BACKUP/" in "$REPO_ROOT/"*)
+    echo "Backup directory must be outside the repository." >&2; exit 1 ;;
+esac
 ask "Use $BACKUP for the certificate, password, and Sparkle private key backups?" || exit 0
 ask "Inspect and configure GitHub Actions secrets?" || exit 0
+EXISTING="$(gh secret list --env release --repo "$REPO" --json name --jq '.[].name')"
+replace_group() {
+    local names="$1"
+    local found=0 name
+    for name in $names; do
+        if printf '%s\n' "$EXISTING" | grep -qx "$name"; then found=1; fi
+    done
+    if [ "$found" -eq 1 ]; then
+        ask "One or more of $names already exist. Replace the complete group?"
+    else
+        ask "Store the complete group $names?"
+    fi
+}
+REPLACE_CERT=0
+replace_group "SIGNING_CERT_P12_BASE64 SIGNING_CERT_PASSWORD" && REPLACE_CERT=1
+REPLACE_SPARKLE=0
+replace_group "SPARKLE_PUBLIC_KEY SPARKLE_PRIVATE_KEY" && REPLACE_SPARKLE=1
+if [ "$REPLACE_CERT" -eq 1 ]; then
+    for file in "$BACKUP/FocusFlow-Developer.p12" "$BACKUP/FocusFlow-Developer.password"; do
+        [ ! -e "$file" ] || { echo "Refusing to overwrite backup: $file" >&2; exit 1; }
+    done
+fi
+if [ "$REPLACE_SPARKLE" -eq 1 ]; then
+    [ ! -e "$BACKUP/Sparkle-private-key" ] ||
+        { echo "Refusing to overwrite backup: $BACKUP/Sparkle-private-key" >&2; exit 1; }
+fi
 
+if [ "$REPLACE_CERT" -eq 1 ]; then
 cat > "$TMP/cert.cnf" <<'EOF'
 [req]
 distinguished_name = subject
@@ -49,50 +82,40 @@ P12_FLAGS=()
 if openssl pkcs12 -help 2>&1 | grep -q -- '-legacy'; then
     P12_FLAGS=(-legacy)
 fi
-openssl pkcs12 -export "${P12_FLAGS[@]}" -out "$TMP/cert.p12" \
+openssl pkcs12 -export ${P12_FLAGS[@]+"${P12_FLAGS[@]}"} -out "$TMP/cert.p12" \
     -inkey "$TMP/cert.key" -in "$TMP/cert.crt" -passout "pass:$P12_PASSWORD"
 TEST_KEYCHAIN="$TMP/test.keychain-db"
 security create-keychain -p "$P12_PASSWORD" "$TEST_KEYCHAIN" >/dev/null
 trap 'security delete-keychain "$TEST_KEYCHAIN" >/dev/null 2>&1 || true; rm -rf "$TMP"' EXIT
 security import "$TMP/cert.p12" -k "$TEST_KEYCHAIN" -P "$P12_PASSWORD" -T /usr/bin/codesign >/dev/null
 security delete-keychain "$TEST_KEYCHAIN" >/dev/null
-
+cp "$TMP/cert.p12" "$BACKUP/FocusFlow-Developer.p12"
+printf '%s' "$P12_PASSWORD" > "$BACKUP/FocusFlow-Developer.password"
+chmod 600 "$BACKUP/FocusFlow-Developer.p12" "$BACKUP/FocusFlow-Developer.password"
+fi
+if [ "$REPLACE_SPARKLE" -eq 1 ]; then
 ask "Generate or look up Sparkle keys in the account focusflow-release?" || exit 0
 "$SPARKLE_BIN/generate_keys" --account focusflow-release >/dev/null
 PUBLIC_KEY="$("$SPARKLE_BIN/generate_keys" --account focusflow-release -p)"
 "$SPARKLE_BIN/generate_keys" --account focusflow-release -x "$TMP/sparkle-private"
 PRIVATE_KEY="$(cat "$TMP/sparkle-private")"
-
-cp "$TMP/cert.p12" "$BACKUP/FocusFlow-Developer.p12"
-printf '%s' "$P12_PASSWORD" > "$BACKUP/FocusFlow-Developer.password"
 cp "$TMP/sparkle-private" "$BACKUP/Sparkle-private-key"
-chmod 600 "$BACKUP/FocusFlow-Developer.p12" "$BACKUP/FocusFlow-Developer.password" "$BACKUP/Sparkle-private-key"
+chmod 600 "$BACKUP/Sparkle-private-key"
+fi
+if [ "$REPLACE_CERT" -eq 1 ] || [ "$REPLACE_SPARKLE" -eq 1 ]; then
 echo "Backups written to $BACKUP."
+fi
 ask "Continue to GitHub secret changes?" || exit 0
 
-EXISTING="$(gh secret list --repo "$REPO" --json name --jq '.[].name')"
 set_secret() {
     local name="$1" value="$2"
-    printf '%s' "$value" | gh secret set "$name" --repo "$REPO"
+    printf '%s' "$value" | gh secret set "$name" --env release --repo "$REPO"
 }
-replace_group() {
-    local names="$1"
-    local found=0 name
-    for name in $names; do
-        if printf '%s\n' "$EXISTING" | grep -qx "$name"; then found=1; fi
-    done
-    if [ "$found" -eq 1 ]; then
-        ask "One or more of $names already exist. Replace the complete group?" || return 1
-    else
-        ask "Store the complete group $names?" || return 1
-    fi
-    return 0
-}
-if replace_group "SIGNING_CERT_P12_BASE64 SIGNING_CERT_PASSWORD"; then
+if [ "$REPLACE_CERT" -eq 1 ]; then
     set_secret SIGNING_CERT_P12_BASE64 "$(base64 < "$TMP/cert.p12" | tr -d '\n')"
     set_secret SIGNING_CERT_PASSWORD "$P12_PASSWORD"
 fi
-if replace_group "SPARKLE_PUBLIC_KEY SPARKLE_PRIVATE_KEY"; then
+if [ "$REPLACE_SPARKLE" -eq 1 ]; then
     set_secret SPARKLE_PUBLIC_KEY "$PUBLIC_KEY"
     set_secret SPARKLE_PRIVATE_KEY "$PRIVATE_KEY"
 fi
