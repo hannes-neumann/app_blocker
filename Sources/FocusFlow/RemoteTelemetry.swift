@@ -16,7 +16,7 @@ enum RemoteContract {
     private static let ruleKinds = Set(TrackingRule.Kind.allCases.map(\.rawValue))
     private static let via: Set<String> = ["hotkey", "escape"]
     private static let sources: Set<String> = [
-        "auto", "break_suggestion", "button", "card", "dashboard", "enter", "hotkey", "link", "menu", "menu_streak",
+        "auto", "break_panel", "break_suggestion", "button", "card", "dashboard", "enter", "hotkey", "link", "menu", "menu_streak",
         "project_card", "project_page", "project_task", "projects", "quick_capture", "sidebar", "timer_entry",
     ]
     private static let settings: Set<String> = [
