@@ -142,6 +142,7 @@ final class AppState {
         }
         todos.enqueue = { [aiQueue] job in aiQueue.enqueue(kind: "note", job) }
         Analytics.start()
+        CrashDiagnostics.shared.start()
         Analytics.track(.appLaunched, [
             "os_version": .string(ProcessInfo.processInfo.operatingSystemVersionString),
             "open_todos": .int(todos.open.count),

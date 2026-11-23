@@ -36,6 +36,7 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 COMMIT="$(git rev-parse --short=10 HEAD 2>/dev/null || echo unknown)"
 [ -z "$(git status --porcelain 2>/dev/null)" ] || COMMIT="$COMMIT+"
 /usr/libexec/PlistBuddy -c "Add :FocusFlowCommit string $COMMIT" \
+    -c "Add :FocusFlowPostHogKey string ${FOCUSFLOW_POSTHOG_KEY:-}" \
     -c "Add :FocusFlowBuildDate string $(date '+%Y-%m-%d %H:%M:%S')" "$APP/Contents/Info.plist"
 ICONSET="$(mktemp -d "${TMPDIR:-/tmp}/FocusFlowIcon.XXXXXX.iconset")"
 trap 'rm -rf "$ICONSET"' EXIT

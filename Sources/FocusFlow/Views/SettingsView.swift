@@ -252,6 +252,7 @@ private struct AppIcon: View {
 private struct GeneralSettingsView: View {
     @Environment(AppState.self) private var state
     @State private var loggingEnabled = Analytics.settings.enabled
+    @State private var telemetryEnabled = Analytics.settings.telemetryEnabled
     @State private var logSize = LocalFileSink.totalSize
 
     var body: some View {
@@ -276,6 +277,16 @@ private struct GeneralSettingsView: View {
             }
 
             ClaudeSection()
+
+            Section(L10n.text("telemetry")) {
+                Toggle(L10n.text("telemetryOptIn"), isOn: $telemetryEnabled)
+                    .onChange(of: telemetryEnabled) { Analytics.setTelemetryEnabled(telemetryEnabled) }
+                Text(L10n.text("telemetryFooter"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Link(L10n.text("privacyPolicy"), destination: URL(string: "https://github.com/hannes-neumann/app_blocker/blob/main/PRIVACY.md")!)
+                Button(L10n.text("resetTelemetry")) { Analytics.resetTelemetryIdentity() }
+            }
 
             Section {
                 Toggle(L10n.text("logUsage"), isOn: $loggingEnabled)

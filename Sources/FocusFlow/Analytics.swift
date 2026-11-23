@@ -47,7 +47,7 @@ typealias AnalyticsProperties = [String: AnalyticsValue]
 
 /// Everything the user does in the app. Names and keys are snake_case and at most 40 characters,
 /// the limits of Firebase Analytics, so events can be sent there unchanged later.
-enum AnalyticsEventName: String, Codable {
+enum AnalyticsEventName: String, Codable, CaseIterable {
     // App
     case appLaunched = "app_launched"
     case appQuit = "app_quit"
@@ -125,6 +125,7 @@ enum AnalyticsEventName: String, Codable {
     case ollamaStarted = "ollama_started"
     case modelPullStarted = "model_pull_started"
     case modelPullFinished = "model_pull_finished"
+    case appCrashed = "app_crashed"
 }
 
 struct AnalyticsEvent: Codable {
@@ -260,6 +261,20 @@ final class LocalFileSink: AnalyticsSink {
 struct AnalyticsSettings: Codable {
     var enabled = true
     var installID = UUID()
+    var telemetryEnabled = false
+    var telemetryID = UUID()
+    var telemetrySessionID = UUID()
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        installID = try c.decodeIfPresent(UUID.self, forKey: .installID) ?? UUID()
+        telemetryEnabled = try c.decodeIfPresent(Bool.self, forKey: .telemetryEnabled) ?? false
+        telemetryID = try c.decodeIfPresent(UUID.self, forKey: .telemetryID) ?? UUID()
+        telemetrySessionID = try c.decodeIfPresent(UUID.self, forKey: .telemetrySessionID) ?? UUID()
+    }
 }
 
 /// Records what the user does, for improving the app with real usage data.
@@ -284,18 +299,49 @@ enum Analytics {
 
     static func start() {
         launchedAt = Date()
+        if settings.telemetryEnabled, let remote = PostHogAnalyticsSink() {
+            sinks.append(remote)
+        }
     }
     static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 
     static func track(_ name: AnalyticsEventName, _ properties: AnalyticsProperties = [:], content: [String: String]? = nil) {
         guard settings.enabled else { return }
+        let safeProperties = sanitize(name, properties)
         let event = AnalyticsEvent(name: name, sessionID: sessionID, installID: settings.installID,
-                                   appVersion: appVersion, properties: properties, content: content)
+                                   appVersion: appVersion, properties: safeProperties, content: content)
         sinks.forEach { $0.record(event) }
+    }
+
+    /// Remote sinks receive only this explicit, reviewed contract; local logs retain their detail.
+    static func sanitize(_ name: AnalyticsEventName, _ properties: AnalyticsProperties) -> AnalyticsProperties {
+        let allowed = RemoteTelemetry.allowlist[name] ?? []
+        return properties.filter { key, value in
+            guard allowed.contains(key) else { return false }
+            switch value {
+            case .int, .double, .bool: return true
+            case .string(let value): return RemoteTelemetry.allowedStringValues[key]?.contains(value) == true
+            }
+        }
     }
 
     static func flush() {
         sinks.forEach { $0.flush() }
+    }
+
+    static func resetTelemetryIdentity() {
+        settings.telemetryID = UUID()
+        settings.telemetrySessionID = UUID()
+        sinks.compactMap { $0 as? PostHogAnalyticsSink }.forEach { $0.reset() }
+    }
+
+    static func setTelemetryEnabled(_ enabled: Bool) {
+        settings.telemetryEnabled = enabled
+        if enabled {
+            if !sinks.contains(where: { $0 is PostHogAnalyticsSink }), let remote = PostHogAnalyticsSink() { sinks.append(remote) }
+        } else {
+            sinks.compactMap { $0 as? PostHogAnalyticsSink }.forEach { $0.reset() }
+        }
     }
 
     // MARK: - Settings changes
