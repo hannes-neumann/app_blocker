@@ -8,7 +8,7 @@ set -euo pipefail
 SCRIPT="$(readlink -f "$0")"
 REPO="${FOCUSFLOW_REPO:-$(cd "$(dirname "$SCRIPT")/.." && pwd)}"
 APP="$REPO/build/FocusFlow.app"
-TOKEN_FILE="$HOME/Library/Application Support/FocusFlow/mcp-token"
+DATA="$HOME/Library/Application Support/FocusFlow"
 
 usage() {
     cat <<USAGE
@@ -43,38 +43,39 @@ wait_until_gone() {
     ! alive "$1"
 }
 
-# Quits one copy.
+# The phase the app last wrote; builds from before that only show whether websites are blocked.
+session_running() {
+    local phase; phase="$(cat "$DATA/phase" 2>/dev/null || true)"
+    [ -n "$phase" ] && [ "$phase" != idle ] && return 0
+    [ "$(cat "$DATA/block-state" 2>/dev/null || true)" = on ]
+}
+
+# Quits one copy by its process ID. A focusflow:// link is no use here: macOS picks the copy that gets it and may start
+# another one for it. This is a normal quit, so the app cleans up, and it needs no permission.
 stop_one() {
-    local pid="$1" force="$2"
-    # The app's own quit link: it cleans up blocking and logs like a normal quit, and needs no permission.
-    # -a picks exactly this copy; a plain link might start another one.
-    if [ -r "$TOKEN_FILE" ]; then
-        local query="token=$(tr -d '[:space:]' <"$TOKEN_FILE")"
-        [ "$force" = 1 ] && query="$query&force=1"
-        open -g -a "$(bundle_of "$pid")" "focusflow://quit?$query" || true
-        wait_until_gone "$pid" 10 && return 0
-    fi
-    [ "$force" = 1 ] || return 1
-    # Older builds don't know the quit link. This is a normal quit too, so the app still cleans up.
-    osascript -l JavaScript -e "ObjC.import('AppKit'); $.NSRunningApplication.runningApplicationWithProcessIdentifier($pid).terminate" >/dev/null 2>&1 || true
+    local pid="$1"
+    osascript -l JavaScript -e "ObjC.import('AppKit'); \$.NSRunningApplication.runningApplicationWithProcessIdentifier($pid).terminate" >/dev/null 2>&1 || true
     wait_until_gone "$pid" 20 && return 0
     kill "$pid" 2>/dev/null || true
+    wait_until_gone "$pid" 10 && return 0
+    kill -9 "$pid" 2>/dev/null || true
     wait_until_gone "$pid" 10
 }
 
-# Quits all running copies.
+# Quits all running copies, looking again in case another one started meanwhile.
 stop() {
-    local force="$1" pid failed=0
-    for pid in $(pids); do
-        stop_one "$pid" "$force" && continue
-        failed=1
-        echo "FocusFlow läuft weiter (PID $pid): $(bundle_of "$pid")" >&2
-    done
-    [ "$failed" = 0 ] && return 0
-    if [ "$force" != 1 ]; then
-        echo "Vermutlich läuft gerade eine Fokus-Session (oder eine ältere Version)." >&2
+    local force="$1" pid round
+    running || return 0
+    if [ "$force" != 1 ] && session_running; then
+        echo "Gerade läuft eine Session, FocusFlow läuft weiter." >&2
         echo "Trotzdem beenden mit: focusflow ${COMMAND} --force" >&2
+        return 1
     fi
+    for round in 1 2 3; do
+        for pid in $(pids); do stop_one "$pid" || true; done
+        running || return 0
+    done
+    for pid in $(pids); do echo "FocusFlow lässt sich nicht beenden (PID $pid): $(bundle_of "$pid")" >&2; done
     return 1
 }
 
@@ -162,6 +163,8 @@ done
 case "$COMMAND" in
     restart)
         # Build first, so the app keeps running while the compiler works.
+        # Ask before the build takes its time.
+        if [ "$FORCE" != 1 ] && running && session_running; then stop 0; fi
         "$REPO/scripts/build-app.sh"
         stop "$FORCE"
         unregister_other_copies
@@ -173,7 +176,9 @@ case "$COMMAND" in
     status) status ;;
     clean) clean "$FORCE" ;;
     build) "$REPO/scripts/build-app.sh" ;;
-    start) running && echo "FocusFlow läuft schon." || start ;;
+    start)
+        if running; then status; else start; fi
+        ;;
     stop) stop "$FORCE" && echo "FocusFlow beendet." ;;
     test) "$REPO/scripts/test.sh" ${ARGS[@]+"${ARGS[@]}"} ;;
     release) "$REPO/scripts/release.sh" ;;

@@ -20,7 +20,9 @@ final class AppState {
     let aiQueue = AIBatchQueue()
     let activity = ActivityTracker()
 
-    private(set) var phase: Phase = .idle
+    private(set) var phase: Phase = .idle {
+        didSet { savePhase() }
+    }
     private(set) var remaining: TimeInterval = 0
     private(set) var phaseDuration: TimeInterval = 1
     private(set) var isPaused = false
@@ -126,7 +128,13 @@ final class AppState {
         return L10n.text("roundOf", round, n)
     }
 
+    /// For `focusflow restart`, which must not end a session by accident.
+    private func savePhase() {
+        try? phase.rawValue.write(to: Storage.directory.appendingPathComponent("phase"), atomically: true, encoding: .utf8)
+    }
+
     func setup() {
+        savePhase()
         L10n.language = settings.language
         panels = PanelController(state: self)
         ai.refreshStatus()
