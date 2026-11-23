@@ -69,8 +69,12 @@ fi
 # What was built, for `focusflow status`. A "+" marks changes that are not committed.
 COMMIT="$(git rev-parse --short=10 HEAD 2>/dev/null || echo unknown)"
 [ -z "$(git status --porcelain 2>/dev/null)" ] || COMMIT="$COMMIT+"
-/usr/libexec/PlistBuddy -c "Add :FocusFlowCommit string $COMMIT" \
-    -c "Add :FocusFlowBuildDate string $(date '+%Y-%m-%d %H:%M:%S')" "$APP/Contents/Info.plist"
+PLIST_ARGS=(-c "Add :FocusFlowCommit string $COMMIT")
+if [ -n "${FOCUSFLOW_POSTHOG_KEY:-}" ]; then
+    PLIST_ARGS+=(-c "Add :FocusFlowPostHogKey string $FOCUSFLOW_POSTHOG_KEY")
+fi
+PLIST_ARGS+=(-c "Add :FocusFlowBuildDate string $(date '+%Y-%m-%d %H:%M:%S')")
+/usr/libexec/PlistBuddy "${PLIST_ARGS[@]}" "$APP/Contents/Info.plist"
 ICONSET="$(mktemp -d "${TMPDIR:-/tmp}/FocusFlowIcon.XXXXXX.iconset")"
 trap 'rm -rf "$ICONSET"' EXIT
 sips -s format png Resources/FocusFlowIcon.svg --out "$ICONSET/icon_1024x1024.png" >/dev/null
