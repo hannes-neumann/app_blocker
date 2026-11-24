@@ -276,6 +276,9 @@ private struct GeneralSettingsView: View {
             }
 
             ClaudeSection()
+            UpdatesSection()
+
+            TelemetrySection()
 
             Section {
                 Toggle(L10n.text("logUsage"), isOn: $loggingEnabled)

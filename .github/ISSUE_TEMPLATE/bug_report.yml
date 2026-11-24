@@ -1,0 +1,22 @@
+name: Bug report
+description: Report a reproducible problem
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bitte keine persönlichen Logs, Notizen, Domains oder andere private Daten einfügen.
+        Please do not paste personal logs, notes, domains, or other private data.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: FocusFlow version and macOS version
+    validations:
+      required: true

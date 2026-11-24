@@ -71,6 +71,7 @@ final class PanelController {
     private let capturePanel = FloatingPanel(closesOnResignKey: true, movable: true)
     private let timerPanel = FloatingPanel(closesOnResignKey: true)
     private let projectPanel = FloatingPanel(closesOnResignKey: false, movable: true)
+    private let telemetryPanel = FloatingPanel(closesOnResignKey: false, movable: true)
     private let breakPanel = FloatingPanel(closesOnResignKey: false)
     private let hudPanel = FloatingPanel(closesOnResignKey: false)
     private var dashboardWindow: NSWindow?
@@ -145,6 +146,23 @@ final class PanelController {
         projectPanel.position(verticalFraction: 0.3)
         projectPanel.makeKeyAndOrderFront(nil)
         projectPanel.orderFrontRegardless()
+    }
+
+    /// Closing it without an answer (esc) counts as no.
+    func showTelemetryConsent() {
+        guard !telemetryPanel.isVisible else { return }
+        telemetryPanel.onCancel = { Analytics.answerTelemetry(false) }
+        telemetryPanel.setContent(TelemetryConsentView { [telemetryPanel] allowed in
+            Analytics.answerTelemetry(allowed)
+            telemetryPanel.orderOut(nil)
+        })
+        telemetryPanel.position(verticalFraction: 0.35)
+        telemetryPanel.orderFrontRegardless()
+    }
+
+    /// Without an answer, so the question comes back when the timer is idle again.
+    func hideTelemetryConsent() {
+        telemetryPanel.orderOut(nil)
     }
 
     func showBreak() {

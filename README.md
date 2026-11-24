@@ -4,9 +4,13 @@
 notes into estimated todos with a local language model, tracks time per project automatically, and lets Claude
 plan your todos into your calendar.
 
-Everything runs on your Mac. No account, no cloud, no screen recording, and no collection of screen pixels.
+Everything runs on your Mac. No account, no screen recording, and no collection of screen pixels.
 Tracking does not store the text it reads: it uses macOS Accessibility text only to match project names and
 automatically assign activity.
+
+Pseudonymous telemetry uses a random, resettable identifier; it is opt-in and off by default. When enabled,
+events are sent to PostHog's EU free tier.
+See [PRIVACY.md](PRIVACY.md).
 
 > Deutsche Dokumentation mit allen Details: [docs/README.de.md](docs/README.de.md)
 
@@ -42,11 +46,36 @@ automatically assign activity.
   focus blocks into free calendar slots, and add, complete or start todos.
 - **German and English** throughout.
 
-## Requirements
+## Install
 
-- macOS 14 or later (Apple silicon or Intel)
-- To build: Swift 6 via the Xcode Command Line Tools; full Xcode is not needed
-- Optional: Ollama (`brew install ollama`) for the AI features on macOS before 26
+Needs macOS 14 (Sonoma) or later, on Apple silicon or Intel.
+
+1. Download the DMG from the [latest release](https://github.com/hannes-neumann/app_blocker/releases/latest) and drag
+   FocusFlow into **Applications**. Start it from there, not from the DMG, or updates cannot be installed.
+2. Open it. macOS says it cannot verify the app: click **Done**, then System Settings → Privacy & Security →
+   **Open Anyway**. Once only. FocusFlow is not notarized, because that needs Apple's paid developer program.
+3. FocusFlow lives in the menu bar. It asks once whether it may send pseudonymous usage data; “No” changes nothing
+   about how it works ([PRIVACY.md](PRIVACY.md)).
+
+| macOS asks for | Why | Needed? |
+| --- | --- | --- |
+| Admin password, once | helper that blocks websites through `/etc/hosts` | only for website blocking |
+| Accessibility | window titles and visible text for time tracking | only for time tracking |
+| Control of your browser | address of the active tab | only if turned on in time tracking |
+
+**Updates** arrive inside the app (Settings → General → Updates), never during a focus session, and are checked with an
+EdDSA signature. **Problems?** [Open an issue](https://github.com/hannes-neumann/app_blocker/issues/new/choose), without
+personal logs. **Uninstall:** remove the helper under Settings → Blocking, quit, delete the app and
+`~/Library/Application Support/FocusFlow`.
+
+| System | Works? |
+| --- | --- |
+| macOS 26 or later | yes, AI with Apple Intelligence (where available) or Ollama |
+| macOS 14 and 15 | yes, AI with Ollama; without it, keyword estimates |
+| macOS 13 or earlier | no |
+| Windows, Linux | no |
+
+To build it yourself: Swift 6 from the Xcode Command Line Tools; full Xcode is not needed.
 
 ## Build and run
 
@@ -77,12 +106,28 @@ placeholders), tracking rules, the AI batch queue, todo handling, loading older 
 as a separate process. Tests use a scratch data folder and never touch your real data. GitHub Actions runs them on
 every push; `git config core.hooksPath .githooks` also runs them before each push locally.
 
-## Sharing builds
+## Sharing with friends
 
-`./scripts/release.sh` builds a universal app and packs a DMG and a ZIP in `build/release`, signed with a
-self-signed certificate named `FocusFlow Developer` (see [docs/README.de.md](docs/README.de.md#weitergeben) for how
-to create it). The app is not notarized, so on first launch it has to be allowed once under
-System Settings → Privacy & Security → "Open Anyway"; the DMG includes short instructions.
+Friends only need the release link above. To get there, once:
+
+1. Create a PostHog project (EU region, “Discard client IP data” on).
+2. Create the GitHub environment `release` with yourself as reviewer, for tags `v*` only.
+3. Run `swift build`, then `scripts/setup-release.sh`: it creates the signing certificate and the update key and stores
+   them as secrets. **Back both up.** Without them, existing users may not be able to update.
+4. Fill in contact and retention in `PRIVACY.md`; the release stops while it contains a TODO.
+5. Try it: Actions → Release → Run workflow builds everything without publishing. Install that DMG on a second Mac.
+
+For every version, add a `## X.Y.Z` section to `CHANGELOG.md`, raise the version in `Resources/Info.plist`, then on `main`:
+
+```bash
+git tag -a v0.1.0 -m "FocusFlow 0.1.0" && git push origin v0.1.0
+```
+
+Approve the run on GitHub; it signs, uploads and publishes, and installed apps find the update. Before the first
+friend gets the app, publish two versions and update from one to the other on your own Mac.
+
+A DMG from a plain local `scripts/release.sh` works too, but has no update or PostHog key: it never updates itself.
+Details, rollback and lost keys: [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Claude (MCP)
 
@@ -110,11 +155,14 @@ token that only your user can read.
 | AI | `AIEngine.swift`, `AIBatchQueue.swift`, `OllamaClient.swift`, `TodoRefiner.swift` |
 | Time tracking | `ActivityTracker.swift`, `Views/TrackingViews.swift` |
 | Insights and dashboard | `StatsStore.swift`, `Insights.swift`, `Views/` |
-| Local event log | `Analytics.swift` (JSON lines, size-capped, never leaves the Mac) |
+| Local event log | `Analytics.swift` (JSON lines, size-capped; optional pseudonymous telemetry is opt-in) |
 | Translations | `Localization.swift` |
 | MCP server | `Sources/FocusFlowMCP/main.swift` |
 
-Data lives in `~/Library/Application Support/FocusFlow/`.
+Data lives in `~/Library/Application Support/FocusFlow/`. GitHub Releases and Actions are free for this
+public repository. Builds are not notarized without a paid Apple Developer account; Apple's fee waiver
+does not cover individuals. On first launch choose **Open Anyway** under System Settings → Privacy &
+Security. Later Sparkle updates are verified with EdDSA signatures.
 
 ## Known limitations
 

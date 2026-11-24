@@ -33,6 +33,15 @@ enum L10n {
         "timer": [.german: "Timer", .english: "Timer"],
         "blocking": [.german: "Blockieren", .english: "Blocking"],
         "general": [.german: "Allgemein", .english: "General"],
+        "updates": [.german: "Updates", .english: "Updates"],
+        "automaticChecks": [.german: "Automatisch nach Updates suchen", .english: "Check for updates automatically"],
+        "automaticDownloads": [.german: "Updates automatisch laden", .english: "Download updates automatically"],
+        "currentVersion": [.german: "Aktuelle Version", .english: "Current version"],
+        "lastCheck": [.german: "Letzte Prüfung", .english: "Last check"],
+        "checkForUpdates": [.german: "Nach Updates suchen", .english: "Check for updates"],
+        "updatesOff": [.german: "Updates sind in diesem Build deaktiviert.", .english: "Updates are disabled in this build."],
+        "updatesDuringFocus": [.german: "Updates werden nach dem Fokus geprüft.", .english: "Updates will be checked after focus."],
+        "updateAvailable": [.german: "Update verfügbar", .english: "Update available"],
         "ai": [.german: "KI", .english: "AI"],
         "language": [.german: "Sprache", .english: "Language"],
         "german": [.german: "Deutsch", .english: "German"],
@@ -189,8 +198,22 @@ enum L10n {
         , "loadFailed": [.german: "Laden fehlgeschlagen: %@", .english: "Download failed: %@"]
         , "loadModel": [.german: "Modell laden", .english: "Download model"]
         , "log": [.german: "Protokoll", .english: "Log"]
-        , "logFooter": [.german: "Speichert jede Bedienung mit Zeitpunkt auf diesem Mac, damit wir die App anhand echter Nutzung verbessern können. Nichts verlässt deinen Mac. Texte wie Notizen und Todo-Titel stehen getrennt im Feld „content“, damit sie beim späteren Teilen weggelassen werden können. Abgeschlossene Tage werden komprimiert; die Protokolle belegen höchstens 50 MB (10 MB pro Tag) und werden nach 180 Tagen gelöscht.", .english: "Saves every interaction with a timestamp on this Mac, so the app can be improved from real usage. Nothing leaves your Mac. Text such as notes and task titles is kept separately in the “content” field, so it can be left out if data is ever shared. Finished days are compressed; logs use at most 50 MB (10 MB per day) and are deleted after 180 days."]
+        , "logFooter": [.german: "Speichert jede Bedienung mit Zeitpunkt auf diesem Mac. Dieses Protokoll verlässt deinen Mac nicht; was du freiwillig sendest, regelt der Abschnitt darüber. Texte wie Notizen und Todo-Titel stehen getrennt im Feld „content“. Abgeschlossene Tage werden komprimiert; die Protokolle belegen höchstens 50 MB (10 MB pro Tag) und werden nach 180 Tagen gelöscht.", .english: "Saves every interaction with a timestamp on this Mac. This log never leaves your Mac; the section above controls what you choose to send. Text such as notes and task titles is kept separately in the “content” field. Finished days are compressed; logs use at most 50 MB (10 MB per day) and are deleted after 180 days."]
         , "logUsage": [.german: "Nutzung protokollieren", .english: "Log usage"]
+        , "telemetry": [.german: "Pseudonyme Nutzungsdaten", .english: "Pseudonymous usage data"]
+        , "telemetryOptIn": [.german: "Nutzungs- und Absturzdaten senden", .english: "Send usage and crash data"]
+        , "telemetryFooter": [.german: "Freiwillig und jederzeit abschaltbar. Gesendet werden nur Zahlen, Zustände und Absturzstellen mit einer zufälligen ID an PostHog (EU). Keine Texte, Namen, Apps, Webseiten oder Dateipfade.", .english: "Voluntary, and you can turn it off at any time. Only counts, states and crash positions are sent with a random ID to PostHog (EU). No text, names, apps, websites or file paths."]
+        , "telemetryID": [.german: "Zufällige ID", .english: "Random ID"]
+        , "copyTelemetryID": [.german: "ID kopieren", .english: "Copy ID"]
+        , "resetTelemetry": [.german: "Neue ID", .english: "New ID"]
+        , "telemetryAskTitle": [.german: "Hilfst du, FocusFlow zu verbessern?", .english: "Help improve FocusFlow?"]
+        , "telemetryAskIntro": [.german: "FocusFlow kann Nutzungs- und Absturzdaten mit einer zufälligen ID an PostHog (EU) senden. Ohne dein Ja wird nichts gesendet.", .english: "FocusFlow can send usage and crash data with a random ID to PostHog (EU). Nothing is sent unless you say yes."]
+        , "telemetrySent": [.german: "Gesendet: welche Funktionen du nutzt, Dauer von Sessions, Anzahlen, App- und macOS-Version, Absturzstellen", .english: "Sent: which features you use, session lengths, counts, app and macOS version, crash positions"]
+        , "telemetryNotSent": [.german: "Nie gesendet: Notizen, Todos, Projektnamen, Apps, Webseiten, Fenstertitel, Dateipfade", .english: "Never sent: notes, tasks, project names, apps, websites, window titles, file paths"]
+        , "telemetryAskFooter": [.german: "Du kannst das jederzeit unter Einstellungen → Allgemein ändern.", .english: "You can change this at any time under Settings → General."]
+        , "telemetryYes": [.german: "Ja, senden", .english: "Yes, send"]
+        , "telemetryNo": [.german: "Nein, nicht senden", .english: "No, don’t send"]
+        , "privacyPolicy": [.german: "Datenschutzerklärung", .english: "Privacy policy"]
         , "longBreakAfter": [.german: "Lange Pause nach", .english: "Long break after"]
         , "minFocus": [.german: "Min Fokus", .english: "min focus"]
         , "minUnit": [.german: "Min", .english: "min"]

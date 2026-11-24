@@ -47,7 +47,7 @@ typealias AnalyticsProperties = [String: AnalyticsValue]
 
 /// Everything the user does in the app. Names and keys are snake_case and at most 40 characters,
 /// the limits of Firebase Analytics, so events can be sent there unchanged later.
-enum AnalyticsEventName: String, Codable {
+enum AnalyticsEventName: String, Codable, CaseIterable {
     // App
     case appLaunched = "app_launched"
     case appQuit = "app_quit"
@@ -125,6 +125,7 @@ enum AnalyticsEventName: String, Codable {
     case ollamaStarted = "ollama_started"
     case modelPullStarted = "model_pull_started"
     case modelPullFinished = "model_pull_finished"
+    case appCrashed = "app_crashed"
 }
 
 struct AnalyticsEvent: Codable {
@@ -260,12 +261,32 @@ final class LocalFileSink: AnalyticsSink {
 struct AnalyticsSettings: Codable {
     var enabled = true
     var installID = UUID()
+    /// Sending usage data to PostHog is off until the user agrees; independent of `enabled`, the local log.
+    var telemetryEnabled = false
+    /// Random, only for sent events, so they cannot be matched to the local log.
+    var telemetryID = UUID()
+    /// The privacy policy the user answered to, 0 when never asked.
+    var telemetryPolicy = 0
+
+    var telemetryAllowed: Bool { telemetryEnabled && telemetryPolicy == RemoteTelemetry.policyVersion }
+
+    init() {}
+
+    // Field by field, so the install ID and an opt-out saved by older versions survive new fields.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        installID = try c.decodeIfPresent(UUID.self, forKey: .installID) ?? UUID()
+        telemetryEnabled = try c.decodeIfPresent(Bool.self, forKey: .telemetryEnabled) ?? false
+        telemetryID = try c.decodeIfPresent(UUID.self, forKey: .telemetryID) ?? UUID()
+        telemetryPolicy = try c.decodeIfPresent(Int.self, forKey: .telemetryPolicy) ?? 0
+    }
 }
 
 /// Records what the user does, for improving the app with real usage data.
 ///
-/// Call `Analytics.track` from anywhere on the main actor. To send events to a backend later, implement
-/// `AnalyticsSink` (dropping `content`, and asking the user first) and add it in `Analytics.sinks`.
+/// Call `Analytics.track` from anywhere on the main actor. `sinks` keep events on this Mac; `remote` sends the part
+/// `RemoteContract` allows, only after the user agreed.
 @MainActor
 enum Analytics {
     static var settings: AnalyticsSettings = {
@@ -284,14 +305,36 @@ enum Analytics {
 
     static func start() {
         launchedAt = Date()
+        // Written once, so the telemetry ID stays the same for settings saved by older versions.
+        Storage.save(settings, to: "analytics.json")
+        guard let key = RemoteTelemetry.bundledKey else { return }
+        remote = RemoteTelemetry(key: key, transport: PostHogTransport(), queueURL: RemoteTelemetry.defaultQueueURL,
+                                 isAllowed: { settings.telemetryAllowed }, telemetryID: { settings.telemetryID })
+        remote?.startTimer()
     }
+    /// Nil in builds without a PostHog key: those never send anything.
+    static var remote: RemoteTelemetry?
     static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 
     static func track(_ name: AnalyticsEventName, _ properties: AnalyticsProperties = [:], content: [String: String]? = nil) {
+        remote?.record(name, properties)
         guard settings.enabled else { return }
         let event = AnalyticsEvent(name: name, sessionID: sessionID, installID: settings.installID,
                                    appVersion: appVersion, properties: properties, content: content)
         sinks.forEach { $0.record(event) }
+    }
+
+    static func answerTelemetry(_ allowed: Bool) {
+        settings.telemetryEnabled = allowed
+        settings.telemetryPolicy = RemoteTelemetry.policyVersion
+        // Also on a yes: nothing from before the answer may be sent.
+        remote?.clear()
+    }
+
+    /// Unsent events go too, or they would link the old ID to the new one.
+    static func resetTelemetryID() {
+        settings.telemetryID = UUID()
+        remote?.clear()
     }
 
     static func flush() {

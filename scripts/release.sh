@@ -17,11 +17,17 @@ if [ "$IDENTITY" != "-" ] && ! security find-identity -p codesigning | grep -qF 
 fi
 
 VERSION="$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Resources/Info.plist)"
+VERSION="${FOCUSFLOW_VERSION:-$VERSION}"
 OUT=build/release
 APP="$OUT/FocusFlow.app"
 NAME="FocusFlow-$VERSION"
 
 FOCUSFLOW_BUILD_DIR="$OUT" FOCUSFLOW_SIGN_IDENTITY="$IDENTITY" FOCUSFLOW_UNIVERSAL=1 scripts/build-app.sh
+if [ -n "${FOCUSFLOW_VERSION:-}" ]; then
+    ACTUAL_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")"
+    [ "$ACTUAL_VERSION" = "$FOCUSFLOW_VERSION" ] ||
+        { echo "build-app.sh produced version $ACTUAL_VERSION, expected $FOCUSFLOW_VERSION" >&2; exit 1; }
+fi
 codesign --verify --strict --verbose=1 "$APP"
 
 rm -f "$OUT/$NAME.zip" "$OUT/$NAME.dmg"

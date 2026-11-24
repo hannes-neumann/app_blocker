@@ -19,6 +19,7 @@ final class AppState {
     let ai = AIEngine()
     let aiQueue = AIBatchQueue()
     let activity = ActivityTracker()
+    let updater = Updater()
 
     private(set) var phase: Phase = .idle {
         didSet { savePhase() }
@@ -136,6 +137,7 @@ final class AppState {
     func setup() {
         savePhase()
         L10n.language = settings.language
+        updater.start(for: self)
         panels = PanelController(state: self)
         ai.refreshStatus()
         todos.refiner = { [ai] note in await ai.refine(note) }
@@ -150,6 +152,7 @@ final class AppState {
         }
         todos.enqueue = { [aiQueue] job in aiQueue.enqueue(kind: "note", job) }
         Analytics.start()
+        CrashDiagnostics.shared.start()
         Analytics.track(.appLaunched, [
             "os_version": .string(ProcessInfo.processInfo.operatingSystemVersionString),
             "open_todos": .int(todos.open.count),
@@ -185,6 +188,14 @@ final class AppState {
         isSetUp = true
         pendingURLs.forEach(open)
         pendingURLs = []
+        askForTelemetryIfDue()
+    }
+
+    /// Only while idle, so the question never interrupts a session or a break.
+    private func askForTelemetryIfDue() {
+        guard RemoteTelemetry.shouldAsk(hasKey: Analytics.remote != nil, answeredPolicy: Analytics.settings.telemetryPolicy,
+                                        phase: phase) else { return }
+        panels.showTelemetryConsent()
     }
 
     /// Adds a rule and lets it sort the activity already recorded.
@@ -259,10 +270,12 @@ final class AppState {
         Analytics.flushChanges()
         Analytics.track(.appQuit, ["session_seconds": .int(Int(Date().timeIntervalSince(Analytics.launchedAt)))])
         Analytics.flush()
+        Analytics.remote?.flushOnQuit()
         activity.stop()
         appBlocker.stop()
         domainBlocker.setBlocking(false)
         ai.shutdown()
+        updater.postponedInstallHandler = nil
     }
 
     // MARK: - Timer
@@ -304,16 +317,21 @@ final class AppState {
     func stop() {
         endPhase(reason: "stopped")
         ticker?.invalidate()
+        let oldPhase = phase
         phase = .idle
         remaining = 0
         isPaused = false
         completedFocusSessions = 0
         endBreak()
         applyBlocking(false)
+        updater.phaseChanged(from: oldPhase, to: .idle)
+        askForTelemetryIfDue()
     }
 
     private func begin(_ newPhase: Phase, durationMinutes: Int? = nil, source: String) {
+        let oldPhase = phase
         phase = newPhase
+        panels.hideTelemetryConsent()
         let duration = durationMinutes ?? minutes(for: newPhase)
         phaseDuration = TimeInterval(max(duration, 1) * 60)
         remaining = phaseDuration
@@ -337,6 +355,7 @@ final class AppState {
         } else {
             endBreak()
         }
+        updater.phaseChanged(from: oldPhase, to: newPhase)
     }
 
     private func finishPhase(playSound: Bool = true, reason: String = "completed") {
@@ -354,9 +373,12 @@ final class AppState {
             } else {
                 // Keep the round count so the next focus phase continues the cycle.
                 ticker?.invalidate()
+                let oldPhase = phase
                 phase = .idle
                 remaining = 0
                 endBreak()
+                updater.phaseChanged(from: oldPhase, to: .idle)
+                askForTelemetryIfDue()
             }
         case .idle:
             break

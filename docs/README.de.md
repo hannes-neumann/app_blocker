@@ -4,9 +4,12 @@ Eine macOS-Menüleisten-App, die einen Pomodoro-Fokustimer mit App- und Webseite
 und spontane Gedanken während der Fokuszeit in konkrete Todos verwandelt, die dir in der nächsten
 passenden Pause vorgeschlagen werden.
 
-Alles läuft auf deinem Mac. Kein Konto, keine Cloud und keine Bildschirmaufnahme; die App sammelt keine
+Alles läuft auf deinem Mac. Kein Konto und keine Bildschirmaufnahme; die App sammelt keine
 Bildschirmpixel. Für die Zuordnung liest sie ausschließlich sichtbaren Text über die macOS-Bedienungshilfen
 und speichert diesen gelesenen Text nicht.
+
+Pseudonyme Telemetrie mit einer zufälligen, zurücksetzbaren ID ist standardmäßig deaktiviert und wird nur
+nach deiner Zustimmung an die kostenlose PostHog-EU-Stufe gesendet. Details: [PRIVACY.md](../PRIVACY.md).
 
 ## Features
 
@@ -24,6 +27,36 @@ und speichert diesen gelesenen Text nicht.
 - **Text-Datenschutz**: Es wird kein Bildschirm aufgenommen und es werden keine Bildpunkte gesammelt. Passwortfelder (`AXSecureTextField`) werden nie gelesen; ausgeschlossene Apps werden vollständig übersprungen. Standardmäßig gehört dazu eine Ausschlussliste mit Passwort-Managern und privaten Nachrichten-Apps wie 1Password, Bitwarden, Schlüsselbundverwaltung, WhatsApp, Signal, Telegram, Discord und Nachrichten. Die Liste lässt sich in den Einstellungen bearbeiten. Gelesener Text wird nur für den Projekt-Abgleich verwendet und nicht gespeichert.
 - **Claude-Anbindung (MCP)**: Claude kann deine Todos und Projekte lesen, sie mit deinem Kalender zu Fokus-Blöcken einplanen und Todos anlegen, abhaken oder starten. Siehe unten.
 - **Insights**: Fokuszeit pro Tag nach Projekt mit Tagesziel, Trend zum Zeitraum davor, Zeit nach Projekt, Tageszeiten, Wochentage, Schätzgenauigkeit, Fokuszeit pro Aufgabe und alle Sessions, für 7, 30 oder 90 Tage, dazu automatisch formulierte Auffälligkeiten. Im Menü steht eine Kurzübersicht für heute.
+
+## Installieren
+
+Voraussetzung: macOS 14 (Sonoma) oder neuer, Apple-Chip oder Intel.
+
+1. Lade die DMG aus dem [neuesten Release](https://github.com/hannes-neumann/app_blocker/releases/latest) und zieh
+   FocusFlow in **Programme**. Starte es von dort, nicht aus der DMG, sonst lassen sich Updates nicht installieren.
+2. Öffne es. macOS meldet, dass die App nicht geprüft werden kann: **Fertig**, dann Systemeinstellungen → Datenschutz &
+   Sicherheit → **Dennoch öffnen**. Nur beim ersten Mal. FocusFlow ist nicht notarisiert, weil das Apples kostenpflichtiges
+   Entwicklerprogramm braucht.
+3. FocusFlow sitzt in der Menüleiste. Es fragt einmal, ob es pseudonyme Nutzungsdaten senden darf; ein „Nein“ ändert an
+   den Funktionen nichts ([PRIVACY.md](../PRIVACY.md)).
+
+| macOS fragt nach | Wofür | Nötig? |
+| --- | --- | --- |
+| Admin-Passwort, einmalig | Dienst, der Webseiten über `/etc/hosts` sperrt | nur für die Webseiten-Sperre |
+| Bedienungshilfen | Fenstertitel und sichtbarer Text für die Zeiterfassung | nur für die Zeiterfassung |
+| Steuerung deines Browsers | Adresse des aktiven Tabs | nur wenn in der Zeiterfassung eingeschaltet |
+
+**Updates** kommen in der App (Einstellungen → Allgemein → Updates), nie während einer Fokus-Session, und werden per
+EdDSA-Signatur geprüft. **Probleme?** [Issue anlegen](https://github.com/hannes-neumann/app_blocker/issues/new/choose),
+ohne persönliche Logs. **Deinstallieren:** Dienst unter Einstellungen → Blockieren entfernen, beenden, dann die App und
+`~/Library/Application Support/FocusFlow` löschen.
+
+| System | Läuft? |
+| --- | --- |
+| macOS 26 oder neuer | ja, KI mit Apple Intelligence (wo verfügbar) oder Ollama |
+| macOS 14 und 15 | ja, KI mit Ollama, sonst Schätzung per Stichwort |
+| macOS 13 oder älter | nein |
+| Windows, Linux | nein |
 
 ## Bauen und starten
 
@@ -69,26 +102,28 @@ git config core.hooksPath .githooks
 
 ## Weitergeben
 
-Ohne Apples kostenpflichtiges Entwicklerprogramm lässt sich FocusFlow mit einem eigenen Zertifikat signieren. Weil die
-Signatur dann bei jedem Build gleich bleibt, behält macOS die erteilten Berechtigungen (Bedienungshilfen, Automation)
-auch nach Updates.
+Freunde brauchen nur den Release-Link oben. Einmalig davor:
 
-Einmalig das Zertifikat anlegen: **Schlüsselbundverwaltung → Menü Schlüsselbundverwaltung → Zertifikatsassistent →
-Zertifikat erstellen…**, Name `FocusFlow Developer`, Identitätstyp „Selbstsigniertes Stammzertifikat“,
-Zertifikatstyp „Codesignatur“. Danach:
+1. PostHog-Projekt anlegen (EU-Region, „Discard client IP data“ an).
+2. GitHub-Umgebung `release` anlegen, mit dir als Reviewer und nur für Tags `v*`.
+3. `swift build`, dann `scripts/setup-release.sh`: erzeugt Zertifikat und Update-Schlüssel und legt sie als Secrets ab.
+   **Sichere beides.** Ohne sie lassen sich bestehende Nutzer eventuell nicht mehr aktualisieren.
+4. Kontakt und Speicherdauer in `PRIVACY.md` eintragen; solange dort ein TODO steht, bricht der Release ab.
+5. Ausprobieren: Actions → Release → Run workflow baut alles, ohne zu veröffentlichen. Diese DMG auf einem zweiten Mac
+   installieren.
+
+Für jede Version einen Abschnitt `## X.Y.Z` in `CHANGELOG.md` ergänzen, die Version in `Resources/Info.plist` erhöhen und
+auf `main`:
 
 ```bash
-./scripts/release.sh
+git tag -a v0.1.0 -m "FocusFlow 0.1.0" && git push origin v0.1.0
 ```
 
-Das baut die App für Apple-Chips und Intel und legt `FocusFlow-<Version>.dmg` und `.zip` in `build/release`. Beim
-ersten Signieren fragt macOS, ob `codesign` den Schlüssel benutzen darf („Immer erlauben“). Die Version steht in
-`Resources/Info.plist` (`CFBundleShortVersionString`). Erhöhe sie vor jeder neuen Weitergabe. Ein anderes Zertifikat
-wählst du mit `FOCUSFLOW_SIGN_IDENTITY="Name" ./scripts/release.sh`.
+Den Lauf auf GitHub freigeben; er signiert, lädt hoch und veröffentlicht, installierte Apps finden das Update. Bevor der
+erste Freund die App bekommt, zwei Versionen veröffentlichen und auf dem eigenen Mac von einer auf die andere aktualisieren.
 
-Die App ist nicht von Apple notarisiert. Beim ersten Start muss sie deshalb einmal unter Systemeinstellungen →
-Datenschutz & Sicherheit mit „Dennoch öffnen“ freigegeben werden. Die DMG enthält dazu eine kurze Anleitung
-(`Resources/INSTALL.txt`).
+Eine DMG aus einem einfachen lokalen `scripts/release.sh` geht auch, hat aber keinen Update- und PostHog-Schlüssel und
+aktualisiert sich nie selbst. Details, Rollback und verlorene Schlüssel: [RELEASING.md](RELEASING.md).
 
 ## Wie es funktioniert
 
@@ -133,6 +168,10 @@ sich per Klick auf das Zeit-Badge ändern, entweder über eine Vorauswahl oder m
 als Text („25“, „45 min“, „1h“, „1,5h“, „1:30“).
 
 Daten (Einstellungen, Projekte, Todos und Fokus-Sessions) liegen in `~/Library/Application Support/FocusFlow/`.
+GitHub Releases und Actions sind für öffentliche Repositories kostenlos. Ohne kostenpflichtiges Apple-
+Entwicklerprogramm ist die App nicht notarisiert; Apples Gebührenerlass gilt nicht für Einzelpersonen.
+Beim ersten Start musst du sie unter Systemeinstellungen → Datenschutz & Sicherheit mit „Dennoch öffnen“
+freigeben. Spätere Sparkle-Updates werden mit EdDSA verifiziert.
 
 **Protokoll:** Jede Bedienung wird als eine JSON-Zeile in `Logs/events-JJJJ-MM-TT.jsonl` im selben Ordner
 gespeichert (abschaltbar und löschbar unter Einstellungen → Allgemein, Dateien älter als 180 Tage werden
@@ -144,9 +183,9 @@ alles andere ist frei von Inhalten. Auswerten lässt es sich z. B. so:
 cat ~/Library/Application\ Support/FocusFlow/Logs/*.jsonl | jq -s 'group_by(.name) | map({name: .[0].name, count: length})'
 ```
 
-Event-Namen und Schlüssel folgen den Regeln von Firebase Analytics (snake_case, höchstens 40 Zeichen). Für ein
-späteres Backend implementiert man `AnalyticsSink`, lässt dabei `content` weg, fragt die Nutzer vorher um
-Erlaubnis und hängt den Sink an `Analytics.sinks` an.
+**Nutzungsdaten:** Getrennt vom Protokoll und nur mit Zustimmung sendet `RemoteTelemetry.swift` Events an PostHog (EU).
+`RemoteContract` legt für jedes Event fest, was mitgeht; ein neues Event kompiliert erst, wenn das entschieden ist. Wird
+mehr gesendet als in [PRIVACY.md](../PRIVACY.md) steht, `policyVersion` erhöhen: Dann werden alle neu gefragt.
 
 ## Claude-Anbindung (MCP)
 
