@@ -60,6 +60,7 @@ For day-to-day work there is a small command that builds and restarts the app fr
 ```bash
 ln -s "$PWD/scripts/focusflow" ~/.local/bin/focusflow
 focusflow            # build and restart
+focusflow status     # is the newest build running, and only once?
 focusflow help       # build, start, stop, test, release
 ```
 

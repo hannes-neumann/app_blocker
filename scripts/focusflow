@@ -8,17 +8,19 @@ set -euo pipefail
 SCRIPT="$(readlink -f "$0")"
 REPO="${FOCUSFLOW_REPO:-$(cd "$(dirname "$SCRIPT")/.." && pwd)}"
 APP="$REPO/build/FocusFlow.app"
-TOKEN_FILE="$HOME/Library/Application Support/FocusFlow/mcp-token"
+DATA="$HOME/Library/Application Support/FocusFlow"
 
 usage() {
     cat <<USAGE
 focusflow – FocusFlow bauen und starten ($REPO)
 
   focusflow              bauen und neu starten (wie "restart")
-  focusflow restart      bauen, laufende App beenden, neue starten
+  focusflow restart      bauen, alle laufenden Instanzen beenden, neue starten und prüfen
+  focusflow status       zeigt, was läuft und ob es der neueste Stand ist
   focusflow build        nur bauen
   focusflow start        starten (baut vorher, falls nötig)
-  focusflow stop         beenden
+  focusflow stop         alle laufenden Instanzen beenden
+  focusflow clean        zeigt App-Kopien in anderen Ordnern, --force löscht sie
   focusflow test [...]   Tests, Argumente gehen an swift test
   focusflow release      DMG und ZIP zum Weitergeben bauen
   focusflow where        zeigt den Projektordner
@@ -27,36 +29,121 @@ focusflow – FocusFlow bauen und starten ($REPO)
 USAGE
 }
 
-running() { pgrep -f "FocusFlow.app/Contents/MacOS/FocusFlow$" >/dev/null; }
+# Every running copy, whichever folder it was built in.
+pids() { pgrep -f "FocusFlow.app/Contents/MacOS/FocusFlow$" || true; }
+running() { [ -n "$(pids)" ]; }
+alive() { pids | grep -qx "$1"; }
+bundle_of() { ps -o command= -p "$1" | sed 's|/Contents/MacOS/FocusFlow$||'; }
 
-wait_until_stopped() {
-    for _ in $(seq 1 "$1"); do
-        running || return 0
+wait_until_gone() {
+    for _ in $(seq 1 "$2"); do
+        alive "$1" || return 0
         sleep 0.5
     done
-    ! running
+    ! alive "$1"
 }
 
+# The phase the app last wrote; builds from before that only show whether websites are blocked.
+session_running() {
+    local phase; phase="$(cat "$DATA/phase" 2>/dev/null || true)"
+    [ -n "$phase" ] && [ "$phase" != idle ] && return 0
+    [ "$(cat "$DATA/block-state" 2>/dev/null || true)" = on ]
+}
+
+# Quits one copy by its process ID. A focusflow:// link is no use here: macOS picks the copy that gets it and may start
+# another one for it. This is a normal quit, so the app cleans up, and it needs no permission.
+stop_one() {
+    local pid="$1"
+    osascript -l JavaScript -e "ObjC.import('AppKit'); \$.NSRunningApplication.runningApplicationWithProcessIdentifier($pid).terminate" >/dev/null 2>&1 || true
+    wait_until_gone "$pid" 20 && return 0
+    kill "$pid" 2>/dev/null || true
+    wait_until_gone "$pid" 10 && return 0
+    kill -9 "$pid" 2>/dev/null || true
+    wait_until_gone "$pid" 10
+}
+
+# Quits all running copies, looking again in case another one started meanwhile.
 stop() {
-    local force="$1"
+    local force="$1" pid round
     running || return 0
-    # The app's own quit link: it cleans up blocking and logs like a normal quit, and needs no permission.
-    if [ -r "$TOKEN_FILE" ]; then
-        local query="token=$(tr -d '[:space:]' <"$TOKEN_FILE")"
-        [ "$force" = 1 ] && query="$query&force=1"
-        open -g "focusflow://quit?$query"
-        wait_until_stopped 10 && return 0
-    fi
-    if [ "$force" = 1 ]; then
-        # Older builds don't know the quit link; macOS may ask once whether the terminal may control FocusFlow.
-        osascript -e 'tell application id "com.hannesneumann.FocusFlow" to quit' >/dev/null 2>&1 || true
-        wait_until_stopped 20 && return 0
-        echo "FocusFlow lässt sich nicht beenden." >&2
-    else
-        echo "FocusFlow läuft weiter: Vermutlich läuft gerade eine Fokus-Session (oder eine ältere Version)." >&2
+    if [ "$force" != 1 ] && session_running; then
+        echo "Gerade läuft eine Session, FocusFlow läuft weiter." >&2
         echo "Trotzdem beenden mit: focusflow ${COMMAND} --force" >&2
+        return 1
     fi
+    for round in 1 2 3; do
+        for pid in $(pids); do stop_one "$pid" || true; done
+        running || return 0
+    done
+    for pid in $(pids); do echo "FocusFlow lässt sich nicht beenden (PID $pid): $(bundle_of "$pid")" >&2; done
     return 1
+}
+
+# Built copies in other folders, which Spotlight or a focusflow:// link could start instead of $APP.
+other_copies() {
+    mdfind "kMDItemCFBundleIdentifier == 'com.hannesneumann.FocusFlow'" | while IFS= read -r copy; do
+        [ "$copy" = "$APP" ] || [ ! -d "$copy" ] || echo "$copy"
+    done
+}
+
+# Takes the other copies off macOS's list of apps. The files stay; "focusflow clean" deletes them.
+unregister_other_copies() {
+    local lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+    other_copies | while IFS= read -r copy; do "$lsregister" -u "$copy" >/dev/null 2>&1 || true; done
+    "$lsregister" -f "$APP" || true
+}
+
+clean() {
+    local copies copy pid
+    copies="$(other_copies)"
+    [ -n "$copies" ] || { echo "Keine anderen Kopien gefunden."; return 0; }
+    echo "$copies"
+    if [ "$1" != 1 ]; then
+        echo "Diese Kopien löschen mit: focusflow clean --force"
+        return 0
+    fi
+    while IFS= read -r copy; do
+        for pid in $(pids); do
+            if [ "$(bundle_of "$pid")" = "$copy" ]; then
+                echo "Läuft gerade, bleibt: $copy" >&2
+                continue 2
+            fi
+        done
+        rm -rf "$copy"
+        echo "Gelöscht: $copy"
+    done <<<"$copies"
+}
+
+plist() { /usr/libexec/PlistBuddy -c "Print $2" "$1/Contents/Info.plist" 2>/dev/null || echo unbekannt; }
+
+# Says what is running and fails unless it is exactly one copy with the newest code.
+status() {
+    local ok=1 pid bundle started built commit
+    local all; all="$(pids)"
+    [ -n "$all" ] || { echo "✗ FocusFlow läuft nicht."; return 1; }
+    for pid in $all; do
+        bundle="$(bundle_of "$pid")"
+        echo "PID $pid  $bundle"
+        echo "  Commit $(plist "$bundle" FocusFlowCommit), gebaut $(plist "$bundle" FocusFlowBuildDate)"
+        [ "$bundle" = "$APP" ] || { echo "  ✗ Nicht die App aus diesem Projektordner ($APP)"; ok=0; continue; }
+        started="$(LC_ALL=C date -j -f "%a %b %d %T %Y" "$(LC_ALL=C ps -o lstart= -p "$pid" | xargs)" +%s)"
+        built="$(stat -f %m "$bundle/Contents/MacOS/FocusFlow")"
+        [ "$started" -ge "$built" ] || { echo "  ✗ Wurde vor dem letzten Build gestartet, also läuft noch alter Code"; ok=0; }
+    done
+    [ "$(wc -w <<<"$all")" -eq 1 ] || { echo "✗ Es laufen mehrere Instanzen"; ok=0; }
+    commit="$(plist "$APP" FocusFlowCommit)"
+    if [ "${commit%+}" != "$(git -C "$REPO" rev-parse --short=10 HEAD)" ]; then
+        echo "✗ Der Build gehört nicht zum aktuellen Commit des Projektordners"; ok=0
+    fi
+    if [ -n "$(find "$REPO/Sources" "$REPO/Resources" -type f -newer "$APP/Contents/Info.plist" -print -quit 2>/dev/null)" ]; then
+        echo "✗ Quelltext wurde nach dem Build geändert"; ok=0
+    fi
+    git -C "$REPO" fetch -q origin main 2>/dev/null || echo "! GitHub nicht erreichbar, vergleiche mit dem zuletzt bekannten Stand"
+    local behind; behind="$(git -C "$REPO" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)"
+    [ "$behind" = 0 ] || { echo "✗ Projektordner liegt $behind Commits hinter origin/main: git -C \"$REPO\" pull --ff-only origin main"; ok=0; }
+    [ "$ok" = 1 ] || return 1
+    case "$commit" in *+) echo "! Enthält nicht committete Änderungen" ;; esac
+    echo "✓ Genau eine Instanz, neuester Stand"
 }
 
 start() {
@@ -76,12 +163,22 @@ done
 case "$COMMAND" in
     restart)
         # Build first, so the app keeps running while the compiler works.
+        # Ask before the build takes its time.
+        if [ "$FORCE" != 1 ] && running && session_running; then stop 0; fi
         "$REPO/scripts/build-app.sh"
         stop "$FORCE"
+        unregister_other_copies
         start
+        for _ in $(seq 1 20); do running && break; sleep 0.5; done
+        sleep 1
+        status
         ;;
+    status) status ;;
+    clean) clean "$FORCE" ;;
     build) "$REPO/scripts/build-app.sh" ;;
-    start) running && echo "FocusFlow läuft schon." || start ;;
+    start)
+        if running; then status; else start; fi
+        ;;
     stop) stop "$FORCE" && echo "FocusFlow beendet." ;;
     test) "$REPO/scripts/test.sh" ${ARGS[@]+"${ARGS[@]}"} ;;
     release) "$REPO/scripts/release.sh" ;;
