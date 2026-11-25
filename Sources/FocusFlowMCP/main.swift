@@ -22,6 +22,8 @@ struct ProjectFile: Decodable {
     let id: UUID
     let name: String
     let weeklyGoalMinutes: Int?
+    /// Set when the user marked the project as finished in the app.
+    let finishedAt: Date?
 }
 
 struct FocusRecordFile: Decodable {
@@ -77,7 +79,8 @@ struct FocusData {
 
     init() {
         todos = Self.load([TodoFile].self, "todos.json") ?? []
-        projects = Self.load([ProjectFile].self, "projects.json") ?? []
+        // Finished projects are done: Claude neither plans nor files new todos under them.
+        projects = (Self.load([ProjectFile].self, "projects.json") ?? []).filter { $0.finishedAt == nil }
         records = Self.load([FocusRecordFile].self, "focus-sessions.json") ?? []
         settings = Self.load(SettingsFile.self, "settings.json") ?? SettingsFile()
     }

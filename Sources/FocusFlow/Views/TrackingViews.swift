@@ -21,6 +21,7 @@ extension TrackingRule.Kind {
         case .app: L10n.text("ruleKindApp")
         case .domain: L10n.text("ruleKindDomain")
         case .title: L10n.text("ruleKindTitle")
+        case .learned: L10n.text("ruleKindLearned")
         }
     }
 
@@ -29,6 +30,7 @@ extension TrackingRule.Kind {
         case .app: "app"
         case .domain: "globe"
         case .title: "macwindow"
+        case .learned: "sparkles"
         }
     }
 
@@ -37,6 +39,7 @@ extension TrackingRule.Kind {
         case .app: ""
         case .domain: L10n.text("ruleDomainPlaceholder")
         case .title: L10n.text("ruleTitlePlaceholder")
+        case .learned: ""
         }
     }
 }
@@ -46,6 +49,7 @@ extension ActivitySegment.Assignment {
         switch self {
         case .none: nil
         case .rule: "wand.and.stars"
+        case .inferred: "sparkles"
         case .focus: "timer"
         case .manual: "hand.point.up.left"
         }
@@ -55,6 +59,7 @@ extension ActivitySegment.Assignment {
         switch self {
         case .none: ""
         case .rule: L10n.text("assignedByRule")
+        case .inferred: L10n.text("assignedByText")
         case .focus: L10n.text("assignedByFocus")
         case .manual: L10n.text("assignedManually")
         }
@@ -198,7 +203,7 @@ struct TrackedBlockRow: View {
                     Text(L10n.text("noProject"))
                 }
                 Divider()
-                ForEach(state.projects.projects) { item in
+                ForEach(state.projects.active) { item in
                     Button { state.activity.assign(block, to: item.id) } label: {
                         if block.projectID == item.id { Image(systemName: "checkmark") }
                         Text(item.name)
@@ -325,7 +330,7 @@ struct TrackingRuleSheet: View {
             }
             Picker(L10n.text("project"), selection: $projectID) {
                 Text(L10n.text("chooseProject")).tag(UUID?.none)
-                ForEach(state.projects.projects) { project in
+                ForEach(state.projects.active) { project in
                     Text(project.name).tag(Optional(project.id))
                 }
             }
@@ -351,6 +356,8 @@ struct TrackingRuleSheet: View {
 
     private var rule: TrackingRule? {
         switch kind {
+        case .learned:
+            return nil
         case .app:
             return TrackingRule(kind: .app, value: draft.bundleID, label: draft.appName)
         case .domain:
@@ -411,7 +418,7 @@ struct TrackingRulesCard: View {
             }
             HStack(spacing: 8) {
                 Picker(L10n.text("ruleKind"), selection: $kind) {
-                    ForEach(TrackingRule.Kind.allCases, id: \.self) { kind in
+                    ForEach(TrackingRule.Kind.allCases.filter { $0 != .learned }, id: \.self) { kind in
                         Label(kind.title, systemImage: kind.symbol).tag(kind)
                     }
                 }
@@ -440,7 +447,7 @@ struct TrackingRulesCard: View {
 
     private var textRule: TrackingRule? {
         switch kind {
-        case .app: return nil
+        case .app, .learned: return nil
         case .domain: return TrackingRule.normalizedAddress(value).map { TrackingRule(kind: .domain, value: $0) }
         case .title:
             let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -488,6 +495,10 @@ struct TrackingSettingsView: View {
             } footer: {
                 Text(L10n.text("autoTrackingFooter")).font(.caption).foregroundStyle(.secondary)
             }
+            Section {
+                Label(L10n.text("localOnly"), systemImage: "lock.shield").foregroundStyle(.green)
+                Text(L10n.text("localOnlyBody")).font(.caption).foregroundStyle(.secondary)
+            }
             Section(L10n.text("trackingSources")) {
                 Toggle(L10n.text("trackWindowTitles"), isOn: $activity.settings.windowTitles)
                 if activity.settings.windowTitles {
@@ -520,6 +531,34 @@ struct TrackingSettingsView: View {
                 NumberField(title: L10n.text("pauseWhenIdle"), value: $activity.settings.idleMinutes, range: 1...30)
             }
             Section {
+                Toggle(L10n.text("detectFromText"), isOn: $activity.settings.detectFromText)
+                Text(L10n.text("detectFromTextHint")).font(.caption).foregroundStyle(.secondary)
+                ForEach(activity.settings.excludedApps, id: \.self) { id in
+                    HStack {
+                        Text(appName(id) ?? id)
+                        Spacer()
+                        Button {
+                            activity.settings.excludedApps.removeAll { $0 == id }
+                        } label: {
+                            Image(systemName: "minus.circle").foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                Menu(L10n.text("addExcludedApp")) {
+                    ForEach(runningCandidates(excluding: activity.settings.excludedApps), id: \.id) { app in
+                        Button(app.name) { activity.settings.excludedApps.append(app.id) }
+                    }
+                }
+                Button(L10n.text("restoreExcludedDefaults")) {
+                    activity.settings.excludedApps = ContextFilter.defaultExcludedBundleIDs
+                }
+            } header: {
+                Text(L10n.text("excludedApps"))
+            } footer: {
+                Text(L10n.text("excludedAppsFooter")).font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
                 LabeledContent(L10n.text("stored"), value: L10n.text("trackedDays", Set(activity.segments.map { Calendar.current.startOfDay(for: $0.start) }).count))
                 HStack {
                     Button(L10n.text("showInFinder")) { NSWorkspace.shared.open(ActivityTracker.directory) }
@@ -542,6 +581,16 @@ struct TrackingSettingsView: View {
                 try? await Task.sleep(for: .seconds(2))
             }
         }
+    }
+
+    /// Apps open right now that are not excluded yet, for the "add" menu.
+    private func runningCandidates(excluding excluded: [String]) -> [(id: String, name: String)] {
+        var seen = Set(excluded)
+        return NSWorkspace.shared.runningApplications.compactMap { app -> (id: String, name: String)? in
+            guard app.activationPolicy == .regular, let id = app.bundleIdentifier, !seen.contains(id) else { return nil }
+            seen.insert(id)
+            return (id, app.localizedName ?? id)
+        }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     private func appName(_ bundleID: String) -> String? {

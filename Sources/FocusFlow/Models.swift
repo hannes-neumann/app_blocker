@@ -42,6 +42,11 @@ struct Project: Codable, Identifiable, Equatable {
     var weeklyGoalMinutes: Int?
     /// Which tracked activity counts for this project.
     var trackingRules: [TrackingRule] = []
+    /// Set when the user marks the project as finished. Finished projects keep their history but no longer
+    /// show up where a project is chosen, and tracking no longer assigns time to them.
+    var finishedAt: Date?
+
+    var isFinished: Bool { finishedAt != nil }
 
     init(name: String, colorIndex: Int = 0, symbol: String = "folder.fill") {
         self.name = name
@@ -61,6 +66,7 @@ struct Project: Codable, Identifiable, Equatable {
         symbol = try c.decodeIfPresent(String.self, forKey: .symbol) ?? "folder.fill"
         weeklyGoalMinutes = try c.decodeIfPresent(Int.self, forKey: .weeklyGoalMinutes)
         trackingRules = try c.decodeIfPresent([TrackingRule].self, forKey: .trackingRules) ?? []
+        finishedAt = try c.decodeIfPresent(Date.self, forKey: .finishedAt)
     }
 }
 

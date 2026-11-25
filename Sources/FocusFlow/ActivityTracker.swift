@@ -6,6 +6,8 @@ import Observation
 struct TrackingRule: Codable, Hashable, Identifiable {
     enum Kind: String, Codable, CaseIterable {
         case app, domain, title
+        /// A word the language model learned from the screen. Matches visible text, never the window metadata.
+        case learned
     }
 
     var id = UUID()
@@ -21,6 +23,7 @@ struct TrackingRule: Codable, Hashable, Identifiable {
         case .domain: 300 + value.count
         case .title: 200 + value.count
         case .app: 100
+        case .learned: 150
         }
     }
 
@@ -28,6 +31,8 @@ struct TrackingRule: Codable, Hashable, Identifiable {
         switch kind {
         case .app:
             return bundleID == value
+        case .learned:
+            return false
         case .title:
             guard let title, !value.isEmpty else { return false }
             return title.localizedCaseInsensitiveContains(value)
@@ -75,6 +80,8 @@ struct ActivitySegment: Codable, Identifiable {
         case rule
         /// A focus session for a project was running.
         case focus
+        /// Found from the words of the visible windows, without a rule.
+        case inferred
         /// Set by the user; rules never change it again.
         case manual
     }
@@ -137,6 +144,10 @@ struct TrackingSettings: Codable, Equatable {
     var browserAddresses = false
     var idleMinutes = 3
     var sideWindow = true
+    /// Detect projects from the text of the visible windows, when no rule matches. Text is never stored.
+    var detectFromText = true
+    /// Apps that are never tracked or read. Editable in Settings.
+    var excludedApps = ContextFilter.defaultExcludedBundleIDs
 
     init() {}
 
@@ -148,6 +159,8 @@ struct TrackingSettings: Codable, Equatable {
         browserAddresses = try c.decodeIfPresent(Bool.self, forKey: .browserAddresses) ?? d.browserAddresses
         idleMinutes = try c.decodeIfPresent(Int.self, forKey: .idleMinutes) ?? d.idleMinutes
         sideWindow = try c.decodeIfPresent(Bool.self, forKey: .sideWindow) ?? d.sideWindow
+        detectFromText = try c.decodeIfPresent(Bool.self, forKey: .detectFromText) ?? d.detectFromText
+        excludedApps = try c.decodeIfPresent([String].self, forKey: .excludedApps) ?? d.excludedApps
     }
 }
 
@@ -194,6 +207,12 @@ final class ActivityTracker {
 
     /// The project of a running focus session, and all projects with their rules.
     @ObservationIgnored var context: () -> (focusProjectID: UUID?, projects: [Project]) = { (nil, []) }
+    /// Asks the local language model which project visible text belongs to. Nil when none is available.
+    @ObservationIgnored var classify: ((String, [Project]) async -> ProjectClassification?)?
+    /// Stores words the model learned for a project. Set by the app, which owns the projects.
+    @ObservationIgnored var learn: ((UUID, [String]) -> Void)?
+    @ObservationIgnored private var classifying = false
+    @ObservationIgnored private var lastClassification: (key: Int, at: Date)?
     @ObservationIgnored private var currentID: UUID?
     @ObservationIgnored private var lastSampleAt: Date?
     @ObservationIgnored private var sampling = false
@@ -264,7 +283,8 @@ final class ActivityTracker {
             return
         }
         guard let app = NSWorkspace.shared.frontmostApplication, let bundleID = app.bundleIdentifier,
-              bundleID != Bundle.main.bundleIdentifier, !Self.ignored.contains(bundleID) else {
+              bundleID != Bundle.main.bundleIdentifier, !Self.ignored.contains(bundleID),
+              ContextFilter.isAllowed(bundleID: bundleID, excluded: Set(settings.excludedApps)) else {
             closeCurrent()
             return
         }
@@ -273,12 +293,16 @@ final class ActivityTracker {
         let pid = app.processIdentifier
         let name = app.localizedName ?? bundleID
         let wantsTitle = settings.windowTitles && hasAccessibility
+        let wantsText = settings.detectFromText && hasAccessibility
         let readsAddresses = settings.browserAddresses
         let denied = deniedBrowsers
         let wantsSide = settings.sideWindow
-        let ignored = Self.ignored.union([Bundle.main.bundleIdentifier ?? ""])
+        let excluded = Set(settings.excludedApps)
+        let ignored = Self.ignored.union([Bundle.main.bundleIdentifier ?? ""]).union(excluded)
         probeQueue.async {
             let title = wantsTitle ? Self.windowTitle(pid: pid) : nil
+            // Text is read only to match project names; it is passed on and never stored.
+            var contextText = wantsText ? AccessibilityText.windowText(pid: pid) : nil
             let script = readsAddresses && !denied.contains(bundleID) ? Self.browsers[bundleID] : nil
             let address = script.map { Self.browserAddress(bundleID: bundleID, expression: $0) }
             var side: SideWindow?
@@ -293,6 +317,7 @@ final class ActivityTracker {
                 if case .address(let value) = sideAddress { url = value }
                 side = SideWindow(bundleID: sideID, appName: sideApp.localizedName ?? sideID,
                                   title: wantsTitle ? Self.windowTitle(pid: sidePID) : nil, address: url)
+                if wantsText { contextText = (contextText ?? "") + "\n" + (AccessibilityText.windowText(pid: sidePID) ?? "") }
             }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
@@ -301,21 +326,26 @@ final class ActivityTracker {
                     if let sideDenied { self.deniedBrowsers.insert(sideDenied) }
                     var url: String?
                     if case .address(let value) = address { url = value }
-                    self.record(at: Date(), bundleID: bundleID, appName: name, title: title, address: url, side: side)
+                    self.record(at: Date(), bundleID: bundleID, appName: name, title: title, address: url, side: side,
+                                contextText: contextText)
                 }
             }
         }
     }
 
-    private func record(at now: Date, bundleID: String, appName: String, title: String?, address: String?, side: SideWindow?) {
+    private func record(at now: Date, bundleID: String, appName: String, title: String?, address: String?, side: SideWindow?,
+                        contextText: String? = nil) {
         guard settings.enabled else { return }
-        let (projectID, assignment, bySide) = resolve(bundleID: bundleID, title: title, address: address, side: side)
+        let (projectID, assignment, bySide) = resolve(bundleID: bundleID, title: title, address: address, side: side,
+                                                      contextText: contextText)
         let previousSample = lastSampleAt
         let continuous = previousSample.map { now.timeIntervalSince($0) <= Self.sampleInterval * 3 } ?? false
         if let index = currentIndex, continuous, calendar.isDate(segments[index].start, inSameDayAs: now),
            segments[index].bundleID == bundleID, segments[index].title == title, segments[index].address == address,
            segments[index].side == side,
-           segments[index].assignment == .manual || (segments[index].projectID == projectID && segments[index].assignment == assignment) {
+           segments[index].assignment == .manual || (segments[index].projectID == projectID && segments[index].assignment == assignment)
+            // A segment the model assigned stays one segment while the same screen goes on without a rule.
+            || (segments[index].assignment == .inferred && assignment == .none) {
             segments[index].end = now
         } else {
             closeCurrent()
@@ -326,10 +356,36 @@ final class ActivityTracker {
                                           decidedBySide: bySide)
             segments.append(segment)
             currentID = segment.id
+            if projectID == nil, let contextText { requestClassification(contextText, segmentID: segment.id) }
         }
         lastSampleAt = now
         dirtyDays.insert(calendar.startOfDay(for: now))
         if now.timeIntervalSince(lastSave) >= 60 { save() }
+    }
+
+    /// Stage 2: the model looks at text that no rule or name matched. One request per screen, at most every
+    /// two minutes, and only while no focus session decides. The result goes to the segment it was asked for,
+    /// if that segment is still unassigned. The text is not stored.
+    private func requestClassification(_ text: String, segmentID: UUID) {
+        guard let classify, !classifying, context().focusProjectID == nil else { return }
+        let key = text.hashValue
+        if let last = lastClassification, last.key == key, Date().timeIntervalSince(last.at) < 120 { return }
+        lastClassification = (key, Date())
+        classifying = true
+        let projects = context().projects
+        Task { [weak self] in
+            let result = await classify(text, projects)
+            guard let self else { return }
+            self.classifying = false
+            guard let result else { return }
+            self.learn?(result.projectID, result.keywords)
+            guard let index = self.segments.firstIndex(where: { $0.id == segmentID }),
+                  self.segments[index].assignment == .none else { return }
+            self.segments[index].projectID = result.projectID
+            self.segments[index].assignment = .inferred
+            self.dirtyDays.insert(self.calendar.startOfDay(for: self.segments[index].start))
+            self.save()
+        }
     }
 
     private var currentIndex: Int? {
@@ -348,10 +404,14 @@ final class ActivityTracker {
     }
 
     private func resolve(bundleID: String, title: String?, address: String?,
-                         side: SideWindow?) -> (UUID?, ActivitySegment.Assignment, Bool) {
+                         side: SideWindow?, contextText: String?) -> (UUID?, ActivitySegment.Assignment, Bool) {
         let context = context()
         if let focus = context.focusProjectID { return (focus, .focus, false) }
         guard let match = Self.match(context.projects, bundleID: bundleID, title: title, address: address, side: side) else {
+            // No rule matched: the project whose name appears most often in the visible text, if any.
+            if let contextText, let project = ProjectDetector.bestProject(in: contextText, projects: context.projects) {
+                return (project, .inferred, false)
+            }
             return (nil, .none, false)
         }
         return (match.project, .rule, match.bySide)

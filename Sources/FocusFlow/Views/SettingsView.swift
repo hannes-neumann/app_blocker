@@ -187,7 +187,7 @@ private struct AddDomainSheet: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 4) {
-                Text("URL").font(.caption).foregroundStyle(.secondary)
+                Text(L10n.text("address")).font(.caption).foregroundStyle(.secondary)
                 TextField("https://www.netflix.com", text: $url)
                     .textFieldStyle(.roundedBorder)
                     .controlSize(.large)
