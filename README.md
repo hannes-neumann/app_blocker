@@ -20,7 +20,10 @@ Everything runs on your Mac. No account, no cloud, no screen recording.
   shortly before your next break, and the model is unloaded right after, so it costs little power and memory.
 - **Break suggestions**: each break suggests the longest open todo that still fits.
 - **Projects and insights**: colors, icons, weekly goals, focus time per project, estimate accuracy, best hours of
-  the day, and automatically worded observations.
+  the day, and automatically worded observations. Projects can be completed or reopened from the ... menu on the
+  project page. Completed projects keep their history and statistics, appear under “Completed Projects” in the
+  overview, and are excluded from selection menus (Timer, Todos, assignments). Automatic time tracking no longer
+  assigns time to them, and Claude (MCP) no longer sees them. Open todos remain unchanged.
 - **Automatic time tracking** (opt-in): rules by app, domain or window title assign your time to projects. It also
   considers the window visible *next to* the front app, so a PDF beside a chat counts for the right project. It
   only reads window metadata, never the screen.
