@@ -27,4 +27,10 @@ struct LocalizationTests {
             #expect(placeholders(values[.german] ?? "") == placeholders(values[.english] ?? ""), "\(key)")
         }
     }
+
+    @Test("Address label is localized")
+    func addressLabel() {
+        #expect(L10n.translations["address"]?[.german] == "Adresse")
+        #expect(L10n.translations["address"]?[.english] == "Address")
+    }
 }
